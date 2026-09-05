@@ -27,7 +27,7 @@ function isSensitive(input: string): boolean {
   return SENSITIVE_PATHS.some((pattern) => pattern.test(path));
 }
 
-function reportThreat(target: string, method: string, kind: string) {
+function reportThreat(target: string, method: string, kind: string): void {
   if (triggered) return;
   triggered = true;
 
@@ -65,7 +65,7 @@ function inspectNavigation(target: string, method = "GET", kind = "navigation"):
   return true;
 }
 
-export function installSecurityInterceptor() {
+export function installSecurityInterceptor(): () => void {
   if (installed) return () => undefined;
   installed = true;
 
@@ -80,21 +80,30 @@ export function installSecurityInterceptor() {
 
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (method: string, url: string | URL, ...rest: any[]) {
+  XMLHttpRequest.prototype.open = function (
+    this: XMLHttpRequest,
+    ...args: Parameters<typeof XMLHttpRequest.prototype.open>
+  ): ReturnType<typeof XMLHttpRequest.prototype.open> {
+    const method = args[0];
+    const url = args[1];
     if (inspectNavigation(String(url), method, "xhr")) {
       (this as XMLHttpRequest & { __atibonBlocked?: boolean }).__atibonBlocked = true;
     }
-    return originalOpen.call(this, method, url, ...rest);
+    return originalOpen.apply(this, args);
   } as typeof XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.send = function (body?: Document | XMLHttpRequestBodyInit | null) {
+
+  XMLHttpRequest.prototype.send = function (
+    this: XMLHttpRequest,
+    ...args: Parameters<typeof XMLHttpRequest.prototype.send>
+  ): ReturnType<typeof XMLHttpRequest.prototype.send> {
     if ((this as XMLHttpRequest & { __atibonBlocked?: boolean }).__atibonBlocked) {
       this.abort();
-      return;
+      return undefined;
     }
-    return originalSend.call(this, body);
-  };
+    return originalSend.apply(this, args);
+  } as typeof XMLHttpRequest.prototype.send;
 
-  const onClick = (event: MouseEvent) => {
+  const onClick = (event: MouseEvent): void => {
     const anchor = (event.target as Element | null)?.closest("a[href]") as HTMLAnchorElement | null;
     if (!anchor) return;
     const url = new URL(anchor.href, window.location.origin);
@@ -102,20 +111,28 @@ export function installSecurityInterceptor() {
     if (inspectNavigation(url.href, "GET", "link")) event.preventDefault();
   };
 
-  const onPopState = () => {
+  const onPopState = (): void => {
     if (inspectNavigation(window.location.href, "GET", "history")) return;
   };
 
   const originalPushState = history.pushState.bind(history);
   const originalReplaceState = history.replaceState.bind(history);
-  history.pushState = ((state: any, title: string, url?: string | URL | null) => {
-    if (url && inspectNavigation(String(url), "GET", "history")) return;
-    originalPushState(state, title, url);
-  }) as typeof history.pushState;
-  history.replaceState = ((state: any, title: string, url?: string | URL | null) => {
-    if (url && inspectNavigation(String(url), "GET", "history")) return;
-    originalReplaceState(state, title, url);
-  }) as typeof history.replaceState;
+  history.pushState = function (
+    this: History,
+    ...args: Parameters<History["pushState"]>
+  ): ReturnType<History["pushState"]> {
+    const url = args[2];
+    if (url && inspectNavigation(String(url), "GET", "history")) return undefined;
+    return originalPushState.apply(this, args);
+  };
+  history.replaceState = function (
+    this: History,
+    ...args: Parameters<History["replaceState"]>
+  ): ReturnType<History["replaceState"]> {
+    const url = args[2];
+    if (url && inspectNavigation(String(url), "GET", "history")) return undefined;
+    return originalReplaceState.apply(this, args);
+  };
 
   document.addEventListener("click", onClick, true);
   window.addEventListener("popstate", onPopState);
