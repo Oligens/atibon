@@ -1,8 +1,8 @@
 {
   "routes": [
     {
-      "src": "^/(?:\\.git(?:/.*)?|\\.env(?:\\..*)?|src(?:/.*)?|core-rust(?:/.*)?|bridge-python(?:/.*)?|ml-engine(?:/.*)?|zero-trust(?:/.*)?|deploy(?:/.*)?|(?:package(?:-lock)?|Cargo(?:\\.lock)?|tsconfig|vite\\.config)\\..*)$",
-      "dest": "/api/security/intercept?target=$0"
+      "src": "^/(\\.git(?:/.*)?|\\.env(?:\\..*)?|src(?:/.*)?|core-rust(?:/.*)?|bridge-python(?:/.*)?|ml-engine(?:/.*)?|zero-trust(?:/.*)?|deploy(?:/.*)?|(?:package(?:-lock)?|Cargo(?:\\.lock)?|tsconfig|vite\\.config)\\..*)$",
+      "dest": "/api/security/intercept?target=/$1"
     }
   ]
 }
