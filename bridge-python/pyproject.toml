@@ -1,0 +1,15 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "atibon-core"
+version = "3.0.0"
+description = "Python bridge for the ATIBON native defensive core"
+requires-python = ">=3.10"
+
+[tool.maturin]
+manifest-path = "../core-rust/Cargo.toml"
+module-name = "atibon_core._native"
+python-source = "."
+features = []
