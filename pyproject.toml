@@ -1,0 +1,43 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "atibon-core"
+version = "3.0.0"
+description = "Installable Python bindings for the ATIBON sovereign defensive firewall core"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Oligens" }]
+keywords = ["firewall", "network-security", "dpi", "rust", "pyo3", "maturin", "atibon"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Operating System :: POSIX",
+  "Topic :: System :: Networking",
+  "Topic :: Security"
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Oligens/atibon"
+Repository = "https://github.com/Oligens/atibon"
+Issues = "https://github.com/Oligens/atibon/issues"
+
+[tool.maturin]
+manifest-path = "core-rust/Cargo.toml"
+module-name = "atibon_core._native"
+python-source = "bridge-python"
+bindings = "pyo3"
+features = []
+strip = true
