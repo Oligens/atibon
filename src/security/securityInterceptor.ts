@@ -13,6 +13,8 @@ const SENSITIVE_PATHS = [
 let installed = false;
 let triggered = false;
 
+type AtibonBlockedXHR = XMLHttpRequest & { __atibonBlocked?: boolean };
+
 function normalizePath(input: string): string {
   try {
     return decodeURIComponent(new URL(input, window.location.origin).pathname);
@@ -80,28 +82,32 @@ export function installSecurityInterceptor(): () => void {
 
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
+
   XMLHttpRequest.prototype.open = function (
     this: XMLHttpRequest,
     ...args: Parameters<typeof XMLHttpRequest.prototype.open>
   ): ReturnType<typeof XMLHttpRequest.prototype.open> {
-    const method = args[0];
-    const url = args[1];
+    const [method, url, async, username, password] = args;
     if (inspectNavigation(String(url), method, "xhr")) {
-      (this as XMLHttpRequest & { __atibonBlocked?: boolean }).__atibonBlocked = true;
+      (this as AtibonBlockedXHR).__atibonBlocked = true;
     }
-    return originalOpen.apply(this, args);
-  } as typeof XMLHttpRequest.prototype.open;
+
+    // Call with explicit arguments instead of spreading an overloaded DOM tuple.
+    return originalOpen.call(this, method, url, async, username, password);
+  };
 
   XMLHttpRequest.prototype.send = function (
     this: XMLHttpRequest,
     ...args: Parameters<typeof XMLHttpRequest.prototype.send>
   ): ReturnType<typeof XMLHttpRequest.prototype.send> {
-    if ((this as XMLHttpRequest & { __atibonBlocked?: boolean }).__atibonBlocked) {
+    if ((this as AtibonBlockedXHR).__atibonBlocked) {
       this.abort();
       return undefined;
     }
-    return originalSend.apply(this, args);
-  } as typeof XMLHttpRequest.prototype.send;
+
+    // send() has one optional body argument; passing it explicitly avoids TS2556.
+    return originalSend.call(this, args[0]);
+  };
 
   const onClick = (event: MouseEvent): void => {
     const anchor = (event.target as Element | null)?.closest("a[href]") as HTMLAnchorElement | null;
@@ -117,21 +123,23 @@ export function installSecurityInterceptor(): () => void {
 
   const originalPushState = history.pushState.bind(history);
   const originalReplaceState = history.replaceState.bind(history);
+
   history.pushState = function (
     this: History,
     ...args: Parameters<History["pushState"]>
   ): ReturnType<History["pushState"]> {
-    const url = args[2];
+    const [state, title, url] = args;
     if (url && inspectNavigation(String(url), "GET", "history")) return undefined;
-    return originalPushState.apply(this, args);
+    return originalPushState.call(this, state, title, url);
   };
+
   history.replaceState = function (
     this: History,
     ...args: Parameters<History["replaceState"]>
   ): ReturnType<History["replaceState"]> {
-    const url = args[2];
+    const [state, title, url] = args;
     if (url && inspectNavigation(String(url), "GET", "history")) return undefined;
-    return originalReplaceState.apply(this, args);
+    return originalReplaceState.call(this, state, title, url);
   };
 
   document.addEventListener("click", onClick, true);
