@@ -1,0 +1,22 @@
+mode: active
+fail_closed: true
+performance:
+  max_packet_size: 65535
+  processing_timeout_ms: 100
+security:
+  require_mtls: true
+  require_tpm_attestation: true
+  pqc_provider: external_validated_provider
+consensus:
+  enabled: true
+  nodes: 4
+  byzantine_faults: 1
+  quorum: 3
+machine_learning:
+  training_enabled: false
+  require_signed_model: true
+zero_trust:
+  default_deny: true
+compliance:
+  audit_retention_days: 3650
+  claims_are_evidence_gated: true
