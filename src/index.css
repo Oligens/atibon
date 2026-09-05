@@ -1,1 +1,235 @@
 @import "tailwindcss";
+
+@theme {
+  --font-display: "Chakra Petch", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-body: "IBM Plex Sans", sans-serif;
+
+  --color-void: #04080a;
+  --color-abyss: #060d0a;
+  --color-panel: #0a1410;
+  --color-panel2: #0d1a14;
+  --color-grid: #14261d;
+  --color-line: #1c3527;
+  --color-line2: #2a4d39;
+  --color-neon: #2bff9e;
+  --color-neon-dim: #1a8f5f;
+  --color-phosphor: #7dffb9;
+  --color-amber: #ffb347;
+  --color-amber-deep: #c47a17;
+  --color-cyan: #45e0ff;
+  --color-alarm: #ff3b5c;
+  --color-fog: #c8dccf;
+  --color-fog-dim: #6f8a7b;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--color-void);
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-fog);
+  background:
+    radial-gradient(1200px 700px at 78% -10%, rgba(43, 255, 158, 0.06), transparent 60%),
+    radial-gradient(900px 600px at -10% 40%, rgba(69, 224, 255, 0.045), transparent 55%),
+    radial-gradient(800px 500px at 60% 110%, rgba(255, 179, 71, 0.04), transparent 60%),
+    var(--color-void);
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(43, 255, 158, 0.28);
+  color: #eafff3;
+}
+
+/* ── Scrollbar HUD ─────────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #060d0a; }
+::-webkit-scrollbar-thumb {
+  background: #1c3527;
+  border: 2px solid #060d0a;
+}
+::-webkit-scrollbar-thumb:hover { background: #2bff9e66; }
+
+/* ── Overlays CRT : scanlines + noise + vignette ───────── */
+.crt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(2, 10, 6, 0) 0px,
+    rgba(2, 10, 6, 0) 2px,
+    rgba(2, 10, 6, 0.16) 3px,
+    rgba(2, 10, 6, 0) 4px
+  );
+  mix-blend-mode: multiply;
+}
+.noise-overlay {
+  position: fixed;
+  inset: -50%;
+  z-index: 71;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: noise-shift 0.9s steps(3) infinite;
+}
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(2, 6, 4, 0.55) 100%);
+}
+
+@keyframes noise-shift {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-1.2%, 0.8%); }
+  66% { transform: translate(0.9%, -1.1%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* ── Coins HUD (brackets) ──────────────────────────────── */
+.hud-corner {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+.hud-corner.tl { top: -1px; left: -1px; border-top: 2px solid; border-left: 2px solid; }
+.hud-corner.tr { top: -1px; right: -1px; border-top: 2px solid; border-right: 2px solid; }
+.hud-corner.bl { bottom: -1px; left: -1px; border-bottom: 2px solid; border-left: 2px solid; }
+.hud-corner.br { bottom: -1px; right: -1px; border-bottom: 2px solid; border-right: 2px solid; }
+
+/* ── Boutons HUD ───────────────────────────────────────── */
+.hud-btn {
+  position: relative;
+  font-family: var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+.hud-btn:hover { transform: translateY(-2px); }
+.hud-btn:active { transform: translateY(1px) scale(0.99); }
+
+/* ── Curseur clignotant ────────────────────────────────── */
+@keyframes blink { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+.cursor-blink { animation: blink 1.05s steps(1) infinite; }
+
+/* ── LED pulsée ────────────────────────────────────────── */
+@keyframes led-pulse {
+  0%, 100% { box-shadow: 0 0 4px currentColor, 0 0 10px currentColor; }
+  50% { box-shadow: 0 0 2px currentColor, 0 0 4px currentColor; }
+}
+.led { animation: led-pulse 1.8s ease-in-out infinite; }
+
+@keyframes alarm-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.alarm-flash { animation: alarm-flash 0.55s steps(2) infinite; }
+
+/* ── Révélation au scroll ──────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.reveal.is-in { opacity: 1; transform: none; }
+
+/* ── Flux de paquets sur le pipeline ───────────────────── */
+@keyframes packet-flow {
+  0% { offset-distance: 0%; opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+.packet-dot {
+  offset-rotate: 0deg;
+  animation: packet-flow 4.2s linear infinite;
+}
+@keyframes dash-flow { to { stroke-dashoffset: -28; } }
+.dash-flow { animation: dash-flow 1.4s linear infinite; }
+
+/* ── Titre glitch / flicker ────────────────────────────── */
+@keyframes title-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.55; }
+  94% { opacity: 1; }
+  97% { opacity: 0.75; }
+  98% { opacity: 1; }
+}
+.title-flicker { animation: title-flicker 6s linear infinite; }
+
+@keyframes skull-flicker {
+  0%, 100% { opacity: 0.96; text-shadow: 0 0 14px rgba(43, 255, 158, 0.75), 0 0 42px rgba(43, 255, 158, 0.3); }
+  8% { opacity: 0.8; }
+  10% { opacity: 1; }
+  47% { opacity: 0.88; }
+  50% { opacity: 1; text-shadow: 0 0 22px rgba(43, 255, 158, 0.95), 0 0 60px rgba(43, 255, 158, 0.45); }
+}
+.skull-flicker { animation: skull-flicker 3.4s linear infinite; }
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.rise-in { animation: rise-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+@keyframes decoy-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.decoy-in { animation: decoy-in 0.35s ease-out both; }
+
+/* ── Barres de vecteurs ────────────────────────────────── */
+.vbar {
+  transition: height 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* ── Ligne de terminal tapée ───────────────────────────── */
+@keyframes line-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+.line-in { animation: line-in 0.12s ease-out both; }
+
+/* ── Tokens de coloration syntaxique ───────────────────── */
+.tok-kw   { color: #2bff9e; }
+.tok-ty   { color: #45e0ff; }
+.tok-str  { color: #ffb347; }
+.tok-num  { color: #ff9ecb; }
+.tok-cmt  { color: #57726233; color: #587463; font-style: italic; }
+.tok-mac  { color: #8affd4; }
+.tok-attr { color: #c4a6ff; }
+.tok-life { color: #ffd27d; }
+.tok-sec  { color: #45e0ff; font-weight: 600; }
+.tok-key  { color: #2bff9e; }
+
+.code-scroll { scrollbar-width: thin; scrollbar-color: #1c3527 #060d0a; }
+
+/* ── Grille de fond technique ──────────────────────────── */
+.blueprint {
+  background-image:
+    linear-gradient(rgba(28, 53, 39, 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(28, 53, 39, 0.28) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(80% 80% at 50% 30%, black 30%, transparent 100%);
+}
+
+/* ── Accessibilité : mouvement réduit ──────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001s !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  .noise-overlay { animation: none; }
+}
