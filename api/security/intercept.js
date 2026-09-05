@@ -12,8 +12,8 @@ function clientIp(req) {
 }
 
 export default function handler(req, res) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+  if (req.method !== "POST" && req.method !== "GET") {
+    res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ ok: false, error: "method_not_allowed" });
   }
 
@@ -22,14 +22,15 @@ export default function handler(req, res) {
     try { body = JSON.parse(body); } catch { body = {}; }
   }
 
-  const target = typeof body?.target === "string" ? body.target : "unknown";
+  const queryTarget = typeof req.query?.target === "string" ? req.query.target : "";
+  const target = typeof body?.target === "string" ? body.target : queryTarget || "unknown";
   const ip = clientIp(req);
   const reason = SENSITIVE.test(target) ? "source_probe" : "security_probe";
   const event = {
     ip,
     target: target.slice(0, 512),
-    method: typeof body?.method === "string" ? body.method.slice(0, 16) : "GET",
-    kind: typeof body?.kind === "string" ? body.kind.slice(0, 32) : "unknown",
+    method: typeof body?.method === "string" ? body.method.slice(0, 16) : req.method,
+    kind: typeof body?.kind === "string" ? body.kind.slice(0, 32) : "server-route",
     reason,
     timestamp: new Date().toISOString(),
   };
@@ -39,5 +40,10 @@ export default function handler(req, res) {
 
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("X-ATIBON-Blacklisted", "true");
+
+  if (req.method === "GET") {
+    res.setHeader("Location", "/__atibon_honeypot");
+    return res.status(302).end();
+  }
   return res.status(202).json({ ok: true, intercepted: true, blacklisted: true });
 }
