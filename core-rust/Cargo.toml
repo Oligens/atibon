@@ -6,7 +6,7 @@ description = "ATIBON sovereign defensive firewall core"
 license = "Apache-2.0"
 
 [lib]
-name = "atibon_core_native"
+name = "_native"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
