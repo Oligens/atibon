@@ -1,13 +1,32 @@
 /* ============================================================
- * Noyau matriciel — miroir TypeScript du module Rust
- * `matrix_engine.rs` : mêmes algorithmes (Génération à diagonale
- * dominante, déterminant par élimination de Gauss, inversion
- * Gauss-Jordan) pour une simulation fidèle dans le navigateur.
+ * lib/matrix.ts — Miroir navigateur du noyau Rust (matrix_engine)
+ * Mêmes algorithmes : FNV-1a, diagonale dominante (Lévy–
+ * Desplanques), déterminant par élimination de Gauss, inverse
+ * par Gauss-Jordan. Tout est déterministe (seed = 0xC04AC0DE).
  * ============================================================ */
 
-export const N = 12; // dimension fixe du vecteur d'état
+export const N = 12;
+export const MATRIX_SEED = 0xc04ac0de;
+export const DET_DRIFT_EPS = 1e-9;
 
-/** PRNG déterministe (mulberry32) — équivalent StdRng seedé côté Rust. */
+export type VecN = number[];
+export type MatN = number[][];
+
+export interface PacketDef {
+  src: [number, number, number, number];
+  dst: [number, number, number, number];
+  port: number;
+  payload: string;
+}
+
+export const DEFAULT_PACKET: PacketDef = {
+  src: [192, 168, 1, 24],
+  dst: [10, 0, 0, 7],
+  port: 443,
+  payload: "GET /coj/heartbeat HTTP/1.1",
+};
+
+/* ── RNG déterministe (équivalent StdRng seedé) ─────────────── */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -19,30 +38,74 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-export type Mat = number[][];
-export type Vec = number[];
+/* ── FNV-1a — empreintes d'intégrité ────────────────────────── */
+export function fnv1a16(bytes: Uint8Array): number {
+  let h = 0x811c;
+  for (const b of bytes) {
+    h ^= b;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h & 0xffff;
+}
 
-/** Génère M ∈ GL(n, ℝ) à diagonale strictement dominante → inversible. */
-export function generateMatrix(seed: number, n: number = N): Mat {
-  const rnd = mulberry32(seed);
-  const m: Mat = Array.from({ length: n }, () => new Array(n).fill(0));
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      m[i][j] =
-        i === j
-          ? 1.85 + rnd() * 0.65 // diagonale ∈ [1.85, 2.50]
-          : (rnd() - 0.5) * 0.55; // hors-diagonale ∈ [-0.275, 0.275]
+export function fnv1a32(data: Uint8Array): number {
+  let h = 0x811c9dc5;
+  for (const b of data) {
+    h ^= b;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+export function fnv1a32str(s: string): number {
+  return fnv1a32(new TextEncoder().encode(s));
+}
+
+export function checksumPacket(payload: string): number {
+  return fnv1a16(new TextEncoder().encode(payload));
+}
+
+/* ── Vectorisation (identique à packet.rs) ──────────────────── */
+export function vectorizePacket(p: PacketDef): VecN {
+  const chk = checksumPacket(p.payload);
+  return [
+    p.src[0], p.src[1], p.src[2], p.src[3],
+    p.dst[0], p.dst[1], p.dst[2], p.dst[3],
+    (p.port >> 8) & 0xff,
+    p.port & 0xff,
+    (chk >> 8) & 0xff,
+    chk & 0xff,
+  ];
+}
+
+export const VECTOR_LABELS = [
+  "src₀", "src₁", "src₂", "src₃",
+  "dst₀", "dst₁", "dst₂", "dst₃",
+  "portH", "portL", "chkH", "chkL",
+];
+
+/* ── Génération de M (diagonale strictement dominante) ──────── */
+export function generateMatrix(seed: number): MatN {
+  const rng = mulberry32(seed);
+  const m: MatN = [];
+  for (let i = 0; i < N; i++) {
+    const row: number[] = [];
+    for (let j = 0; j < N; j++) {
+      if (i === j) row.push(1.85 + rng() * 0.65);
+      else row.push((rng() - 0.5) * 0.55);
     }
+    m.push(row);
   }
   return m;
 }
 
-export function mulMatVec(m: Mat, v: Vec): Vec {
+/* ── Produit matrice · vecteur ──────────────────────────────── */
+export function matVec(m: MatN, v: VecN): VecN {
   return m.map((row) => row.reduce((acc, mij, j) => acc + mij * v[j], 0));
 }
 
-/** Déterminant par élimination de Gauss avec pivot partiel. */
-export function determinant(input: Mat): number {
+/* ── Déterminant — élimination de Gauss avec pivot partiel ──── */
+export function determinant(input: MatN): number {
   const n = input.length;
   const a = input.map((r) => [...r]);
   let det = 1;
@@ -53,87 +116,85 @@ export function determinant(input: Mat): number {
     }
     if (Math.abs(a[pivot][col]) < 1e-14) return 0;
     if (pivot !== col) {
-      [a[pivot], a[col]] = [a[col], a[pivot]];
+      [a[col], a[pivot]] = [a[pivot], a[col]];
       det = -det;
     }
     det *= a[col][col];
     for (let r = col + 1; r < n; r++) {
       const f = a[r][col] / a[col][col];
+      if (f === 0) continue;
       for (let c = col; c < n; c++) a[r][c] -= f * a[col][c];
     }
   }
   return det;
 }
 
-/** Inversion par Gauss-Jordan (équivalent de `m.try_inverse()`). */
-export function invert(input: Mat): Mat {
+/* ── Inverse — Gauss-Jordan (M | I) → (I | M⁻¹) ─────────────── */
+export function invertMatrix(input: MatN): MatN | null {
   const n = input.length;
-  const a = input.map((r, i) => {
-    const aug = new Array(2 * n).fill(0);
-    for (let c = 0; c < n; c++) aug[c] = r[c];
-    aug[n + i] = 1;
-    return aug;
+  const a = input.map((row, i) => {
+    const ext = new Array(2 * n).fill(0);
+    row.forEach((v, j) => (ext[j] = v));
+    ext[n + i] = 1;
+    return ext;
   });
+
   for (let col = 0; col < n; col++) {
     let pivot = col;
     for (let r = col + 1; r < n; r++) {
       if (Math.abs(a[r][col]) > Math.abs(a[pivot][col])) pivot = r;
     }
-    [a[pivot], a[col]] = [a[col], a[pivot]];
+    if (Math.abs(a[pivot][col]) < 1e-12) return null; // singulière
+    if (pivot !== col) [a[col], a[pivot]] = [a[pivot], a[col]];
+
     const d = a[col][col];
     for (let c = 0; c < 2 * n; c++) a[col][c] /= d;
+
     for (let r = 0; r < n; r++) {
       if (r === col) continue;
       const f = a[r][col];
+      if (f === 0) continue;
       for (let c = 0; c < 2 * n; c++) a[r][c] -= f * a[col][c];
     }
   }
-  return a.map((r) => r.slice(n));
+  return a.map((row) => row.slice(n));
 }
 
-/** Hash FNV-1a 16 bits — même fonction que `packet.rs`. */
-export function fnv1a16(bytes: number[]): number {
-  let h = 0x811c;
-  for (const b of bytes) {
-    h ^= b & 0xff;
-    h = (h * 0x01000193) >>> 0;
-    h &= 0xffff;
+/* ── Erreur ‖M·M⁻¹ − I‖∞ (audit d'inversion) ────────────────── */
+export function identityError(m: MatN, inv: MatN): number {
+  let max = 0;
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      let s = 0;
+      for (let k = 0; k < N; k++) s += m[i][k] * inv[k][j];
+      const e = Math.abs(s - (i === j ? 1 : 0));
+      if (e > max) max = e;
+    }
   }
-  return h & 0xffff;
+  return max;
 }
 
-export function parseIp(ip: string): number[] {
-  const parts = ip.split(".").map((p) => parseInt(p, 10));
-  while (parts.length < 4) parts.push(0);
-  return parts.slice(0, 4).map((p) => (Number.isFinite(p) ? Math.max(0, Math.min(255, p)) : 0));
-}
+/* ── Formats d'affichage ────────────────────────────────────── */
+export const fmtSci = (v: number, digits = 6): string => {
+  const sign = v < 0 ? "-" : "+";
+  return sign + Math.abs(v).toExponential(digits);
+};
 
-export function parsePayloadHex(hex: string): number[] {
-  const clean = hex.replace(/[^0-9a-fA-F]/g, "");
-  const bytes: number[] = [];
-  for (let i = 0; i + 1 < clean.length && bytes.length < 32; i += 2) {
-    bytes.push(parseInt(clean.slice(i, i + 2), 16));
-  }
-  return bytes;
-}
+export const fmtHex16 = (v: number): string => "0x" + (v & 0xffff).toString(16).toUpperCase().padStart(4, "0");
+export const fmtHex32 = (v: number): string => "0x" + (v >>> 0).toString(16).toUpperCase().padStart(8, "0");
 
-/** Vectorisation dim. 12 : [src×4, dst×4, port_hi, port_lo, chk_hi, chk_lo]. */
-export function vectorize(srcIp: string, dstIp: string, port: number, payloadHex: string): Vec {
-  const src = parseIp(srcIp);
-  const dst = parseIp(dstIp);
-  const chk = fnv1a16(parsePayloadHex(payloadHex));
-  const p = Math.max(0, Math.min(65535, port | 0));
-  return [
-    ...src,
-    ...dst,
-    (p >> 8) & 0xff,
-    p & 0xff,
-    (chk >> 8) & 0xff,
-    chk & 0xff,
-  ];
-}
+export const toBin = (v: number): string => (v >>> 0).toString(2).padStart(32, "0");
 
-export const fmt = (x: number, d = 1): string =>
-  Math.abs(x) >= 1000 || (Math.abs(x) < 0.001 && x !== 0)
-    ? x.toExponential(2)
-    : x.toFixed(d);
+export const ipToStr = (o: [number, number, number, number]): string => o.join(".");
+
+/** Parse une IP "a.b.c.d" → tuple, ou null si invalide. */
+export function parseIp(s: string): [number, number, number, number] | null {
+  const parts = s.trim().split(".");
+  if (parts.length !== 4) return null;
+  const nums = parts.map((p) => {
+    if (!/^\d{1,3}$/.test(p.trim())) return NaN;
+    return parseInt(p.trim(), 10);
+  });
+  if (nums.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return null;
+  return nums as [number, number, number, number];
+}

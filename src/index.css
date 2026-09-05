@@ -187,6 +187,14 @@ body {
 }
 .decoy-in { animation: decoy-in 0.35s ease-out both; }
 
+/* ── Bandeau défilant technique ─────────────────────────── */
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ticker-track { animation: ticker 34s linear infinite; }
+.ticker-track:hover { animation-play-state: paused; }
+
 /* ── Barres de vecteurs ────────────────────────────────── */
 .vbar {
   transition: height 0.55s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s ease, box-shadow 0.3s ease;
@@ -204,7 +212,7 @@ body {
 .tok-ty   { color: #45e0ff; }
 .tok-str  { color: #ffb347; }
 .tok-num  { color: #ff9ecb; }
-.tok-cmt  { color: #57726233; color: #587463; font-style: italic; }
+.tok-cmt  { color: #587463; font-style: italic; }
 .tok-mac  { color: #8affd4; }
 .tok-attr { color: #c4a6ff; }
 .tok-life { color: #ffd27d; }
