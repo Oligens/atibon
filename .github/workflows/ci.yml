@@ -67,4 +67,4 @@ jobs:
           pip install --upgrade pip
           pip install dist/*manylinux*.whl
           pip install pytest
-          pytest
+          pytest tests/
