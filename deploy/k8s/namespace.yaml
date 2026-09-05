@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: atibon
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atibon
+  namespace: atibon

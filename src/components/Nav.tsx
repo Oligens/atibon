@@ -7,61 +7,18 @@ const LINKS = [
   { href: "#deploiement", label: "Déploiement" },
 ];
 
-/** Marque COJ : hexagone + monogramme. */
-function CojMark({ size = 30 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden>
-      <path
-        d="M20 2.5 35 11v18L20 37.5 5 29V11L20 2.5Z"
-        stroke="#2bff9e"
-        strokeWidth="1.6"
-        fill="rgba(43,255,158,0.06)"
-      />
-      <path d="M20 8.5 29.5 14v12L20 31.5 10.5 26V14L20 8.5Z" stroke="#1a8f5f" strokeWidth="1" fill="none" />
-      <text x="20" y="24.5" textAnchor="middle" fontFamily="Chakra Petch, sans-serif" fontWeight="700" fontSize="10.5" fill="#2bff9e">
-        COJ
-      </text>
-    </svg>
-  );
+function AtibonMark({ size = 34 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 40 40" fill="none" aria-hidden><rect x="2" y="2" width="36" height="36" rx="9" fill="rgba(245,158,11,.06)" stroke="#f59e0b"/><path d="M10 31V17l10-8 10 8v14M15 31V20h10v11" stroke="#45e0ff" strokeWidth="1.6"/><path d="M4 13h32M7 18h26" stroke="#f59e0b" strokeWidth=".8" opacity=".8"/></svg>;
 }
 
 export default function Nav() {
   const now = useNow(1000);
   const utc = new Date(now).toISOString().slice(11, 19);
-
-  return (
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-[#14261d] bg-[#04080a]/85 backdrop-blur-sm">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-5">
-        <a href="#top" className="flex items-center gap-3">
-          <CojMark />
-          <div className="leading-none">
-            <div className="font-display text-[15px] font-bold tracking-[0.22em] text-[#eafff3]">
-              COJ-MATRIX <span className="text-[#2bff9e]">FIREWALL</span>
-            </div>
-            <div className="mt-1 font-mono text-[10px] tracking-[0.3em] text-[#6f8a7b]">PoC v0.1.0 · RUST · NALGEBRA</div>
-          </div>
-        </a>
-
-        <nav className="ml-auto hidden items-center gap-1 md:flex">
-          {LINKS.map((l) => (
-            <a
-              key={l.href}
-              href={l.href}
-              className="px-3 py-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#8fae9d] transition-colors duration-200 hover:bg-[#0d1a14] hover:text-[#2bff9e]"
-            >
-              {l.label}
-            </a>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex items-center gap-4 md:ml-6">
-          <div className="hidden items-center gap-2 sm:flex">
-            <span className="led h-2 w-2 rounded-full bg-[#2bff9e] text-[#2bff9e]" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#7dffb9]">Système armé</span>
-          </div>
-          <span className="font-mono text-[11px] tabular-nums tracking-wider text-[#6f8a7b]">{utc} UTC</span>
-        </div>
-      </div>
-    </header>
-  );
+  return <header className="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-[#050b10]/80 backdrop-blur-xl">
+    <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-5">
+      <a href="#top" className="flex items-center gap-3"><AtibonMark /><div><div className="font-display text-base font-bold tracking-[.25em] text-white">ATIBON</div><div className="font-mono text-[9px] uppercase tracking-[.22em] text-slate-500">Souverain digital defense</div></div></a>
+      <nav className="ml-auto hidden gap-1 md:flex">{LINKS.map(l=><a key={l.href} href={l.href} className="px-3 py-2 font-mono text-[10px] uppercase tracking-[.16em] text-slate-400 hover:text-cyan-300">{l.label}</a>)}</nav>
+      <div className="ml-auto flex items-center gap-3 md:ml-4"><span className="led h-2 w-2 rounded-full bg-cyan-300 text-cyan-300"/><span className="hidden font-mono text-[9px] uppercase tracking-[.16em] text-cyan-300 sm:inline">Système armé</span><span className="font-mono text-[10px] text-slate-500">{utc} UTC</span></div>
+    </div>
+  </header>;
 }

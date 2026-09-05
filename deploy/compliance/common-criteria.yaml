@@ -1,0 +1,14 @@
+# ATIBON compliance control baseline
+# This file defines evidence requirements; it does not constitute Common Criteria certification.
+profile: EAL4+-target
+controls:
+  - id: CC-1
+    requirement: secure-development-lifecycle
+  - id: CC-2
+    requirement: configuration-management
+  - id: CC-3
+    requirement: vulnerability-management
+  - id: CC-4
+    requirement: audit-integrity
+  - id: CC-5
+    requirement: independent-security-evaluation

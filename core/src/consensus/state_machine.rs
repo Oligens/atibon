@@ -1,3 +1,0 @@
-use pyo3::prelude::*; use parking_lot::RwLock; use std::collections::HashMap; use std::sync::Arc;
-#[pyclass] pub struct BFTStateManager{threshold:usize,state:Arc<RwLock<HashMap<String,Vec<u8>>>>}
-#[pymethods] impl BFTStateManager{#[new]pub fn new(threshold:usize)->Self{Self{threshold,state:Arc::new(RwLock::new(HashMap::new()))}} pub fn quorum(&self,votes:usize)->bool{votes>=self.threshold} pub fn put_after_quorum(&self,key:&str,value:Vec<u8>,votes:usize)->bool{if self.quorum(votes){self.state.write().insert(key.into(),value);true}else{false}} pub fn get(&self,key:&str)->Option<Vec<u8>>{self.state.read().get(key).cloned()}}

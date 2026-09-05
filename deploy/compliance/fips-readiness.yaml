@@ -1,0 +1,7 @@
+# ATIBON FIPS readiness controls
+# FIPS validation is an external certification process; this is an implementation baseline.
+profile: fips-readiness
+cryptography:
+  approved-provider-required: true
+  key-custody: external-hsm
+  algorithm-policy: centrally-managed
