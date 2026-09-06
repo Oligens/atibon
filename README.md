@@ -1,35 +1,31 @@
 # ATIBON
 
-**Système souverain de défense numérique** — noyau Rust, bridge Python `atibon_core`, IA défensive, Zero Trust, attestation TPM 2.0 et déploiement durci.
+**Système souverain de défense numérique** — noyau Rust, bridge Python atibon_core, IA défensive, Zero Trust, attestation TPM 2.0 et déploiement durci.
+
+## État opérationnel
+
+ATIBON dispose maintenant d'un socle d'enforcement Linux réel via nftables, en complément du DPI Rust, du bridge Python, du suivi de connexions, du moteur de règles fail-closed et de l'audit JSONL.
+
+### Protection d'un serveur Linux
+
+Le binaire `atibon-agent` valide puis applique un ruleset nftables versionné. Le profil fourni bloque par défaut les entrées et autorise uniquement loopback, connexions établies, ICMP/ICMPv6, SSH, HTTP et HTTPS. Il doit être adapté à chaque rôle serveur avant activation.
+
+Voir `deploy/host/README.md`.
 
 ## Architecture
 
-```text
+```
 atibon/
-├── core-rust/       # DPI, consensus byzantin, crypto/PQC + interfaces HSM/TPM
+├── core-rust/       # DPI, conntrack, règles fail-closed, consensus, crypto
 ├── bridge-python/   # package Python atibon_core
 ├── ml-engine/       # modèles robustes et défense anti-empoisonnement
 ├── zero-trust/      # mTLS/PQC policy et TPM 2.0
+├── deploy/host/     # enforcement Linux nftables + systemd
 └── deploy/          # Kubernetes + contrôles de conformité
 ```
 
-L'interface web existante reste au niveau racine (`src/`) pour conserver le produit opérationnel.
+## Production
 
-## Identité visuelle
+Le déploiement recommandé est: shadow/observe-only, validation des flux, activation progressive de l'enforcement, puis surveillance continue.
 
-ATIBON utilise une arche géométrique comme symbole de portail et de seuil sécurisé, avec glassmorphism, ambre et cyan cybernétique. L'interface ne prétend pas à une certification réglementaire par simple présence de code.
-
-## Sécurité et conformité
-
-Les profils Common Criteria EAL4+ et FIPS dans `deploy/compliance/` sont des **cibles et contrôles de préparation**, pas des certifications. Les primitives post-quantiques, HSM/PKCS#11 et TPM doivent être fournis par des implémentations et équipements validés avant un usage réglementé.
-
-## Build Rust
-
-```bash
-cargo check --workspace
-cargo test --workspace
-```
-
-## Bridge Python
-
-Le module natif est exposé sous `atibon_core._native`; la façade applicative est `atibon_core.AtibonEngine`. Le bridge échoue explicitement si le noyau natif n'est pas disponible.
+Les profils Common Criteria EAL4+ et FIPS sont des cibles de préparation et ne constituent pas une certification. L'utilisation réelle d'un HSM/PKCS#11, d'un TPM 2.0 et d'un backend PQC dépend du matériel, des bibliothèques système et de la politique cryptographique de l'environnement cible.
