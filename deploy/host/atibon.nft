@@ -14,11 +14,11 @@ table inet atibon {
     iifname "lo" accept
     ct state established,related accept
     ct state invalid drop
+    ip saddr @ssh_abuse drop
     ip protocol icmp accept
     ip6 nexthdr icmpv6 accept
     tcp dport 22 ct state new limit rate 30/minute burst 20 packets accept
     tcp dport { 80, 443 } ct state new accept
-    ip saddr @ssh_abuse drop
   }
 
   chain forward {
