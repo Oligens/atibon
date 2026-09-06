@@ -1,0 +1,97 @@
+name: ATIBON CI/CD
+
+on:
+  push:
+    branches: [ "defensive-ai-v2", "main" ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ "defensive-ai-v2", "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build wheels (${{ matrix.platform.os }})
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      matrix:
+        platform:
+          - os: ubuntu-latest
+            target: x86_64
+          - os: windows-latest
+            target: x86_64
+          - os: macos-latest
+            target: x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist
+          sccache: 'true'
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.platform.os }}
+          path: dist
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download Linux wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels-ubuntu-latest
+          path: dist
+      - name: Run Python tests
+        shell: bash
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install dist/*manylinux*.whl
+          pip install pytest
+          pytest tests/
+
+  rust:
+    name: Rust verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Test
+        run: cargo test --workspace
+      - name: Check agent
+        run: cargo check -p atibon-core --bin atibon-agent
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
+
+  frontend:
+    name: Front-end verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm run build

@@ -4,6 +4,9 @@ import ConsoleDemo from "./components/ConsoleDemo";
 import CodeSection from "./components/CodeSection";
 import Deploy from "./components/Deploy";
 import Footer from "./components/Footer";
+import HoneypotOverlay from "./components/HoneypotOverlay";
+import { useEffect, useState } from "react";
+import { HONEYPOT_PATH, installSecurityInterceptor } from "./security/securityInterceptor";
 
 const BOOT_LINES = [
   "$ atibon-core --release",
@@ -28,6 +31,20 @@ function BootTerminal() {
 }
 
 export default function App() {
+  const [honeypot, setHoneypot] = useState(() => window.location.pathname === HONEYPOT_PATH);
+
+  useEffect(() => {
+    const onThreat = () => setHoneypot(true);
+    window.addEventListener("atibon:honeypot", onThreat);
+    const uninstall = installSecurityInterceptor();
+    return () => {
+      window.removeEventListener("atibon:honeypot", onThreat);
+      uninstall();
+    };
+  }, []);
+
+  if (honeypot) return <HoneypotOverlay />;
+
   return (
     <div id="top" className="relative min-h-screen bg-[#050b10] text-slate-100">
       <div className="crt-overlay" aria-hidden />
@@ -45,9 +62,7 @@ export default function App() {
               </div>
               <p className="font-mono text-xs uppercase tracking-[.28em] text-cyan-300/70">Portail de défense numérique</p>
               <h1 className="mt-4 max-w-4xl font-display text-5xl font-bold tracking-tight sm:text-7xl">Le seuil sécurisé.</h1>
-              <p className="mt-7 max-w-2xl text-base leading-8 text-slate-400">
-                ATIBON unifie inspection réseau, décision distribuée, cryptographie post-quantique, intelligence défensive et confiance matérielle dans une architecture conçue pour être vérifiable et fail-closed.
-              </p>
+              <p className="mt-7 max-w-2xl text-base leading-8 text-slate-400">ATIBON unifie inspection réseau, décision distribuée, cryptographie post-quantique, intelligence défensive et confiance matérielle dans une architecture conçue pour être vérifiable et fail-closed.</p>
               <div className="mt-9 flex flex-wrap gap-4">
                 <a href="#console" className="hud-btn border border-amber-300/40 bg-amber-300/10 px-7 py-3 text-amber-200 hover:bg-amber-300/20">▶ Ouvrir la console</a>
                 <a href="#architecture" className="hud-btn border border-cyan-300/30 px-7 py-3 text-cyan-200 hover:bg-cyan-300/10">⌘ Architecture</a>
@@ -62,9 +77,7 @@ export default function App() {
             </div>
           </div>
         </section>
-        <div className="overflow-hidden border-y border-white/10 bg-white/[.02] py-3 font-mono text-[10px] uppercase tracking-[.2em] text-slate-500">
-          <div className="ticker-track flex w-max gap-10">{['ATIBON CORE','DPI','HONEYBADGER INTERFACE','ML-KEM / FALCON PROVIDER','HSM / PKCS#11','TPM 2.0','ZERO TRUST','AUDIT INTEGRITY','FAIL-CLOSED'].concat(['ATIBON CORE','DPI','ZERO TRUST']).map((x,i)=><span key={i}>✦ {x}</span>)}</div>
-        </div>
+        <div className="overflow-hidden border-y border-white/10 bg-white/[.02] py-3 font-mono text-[10px] uppercase tracking-[.2em] text-slate-500"><div className="ticker-track flex w-max gap-10">{['ATIBON CORE','DPI','HONEYBADGER INTERFACE','ML-KEM / FALCON PROVIDER','HSM / PKCS#11','TPM 2.0','ZERO TRUST','AUDIT INTEGRITY','FAIL-CLOSED'].concat(['ATIBON CORE','DPI','ZERO TRUST']).map((x,i)=><span key={i}>✦ {x}</span>)}</div></div>
         <Pipeline />
         <ConsoleDemo />
         <CodeSection />

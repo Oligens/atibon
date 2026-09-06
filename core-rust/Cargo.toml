@@ -9,6 +9,10 @@ license = "Apache-2.0"
 name = "_native"
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "atibon-agent"
+path = "src/bin/atibon-agent.rs"
+
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -21,3 +25,4 @@ default = []
 pqc-native = []
 hsm-pkcs11 = []
 tpm2-native = []
+ebpf-aya = []

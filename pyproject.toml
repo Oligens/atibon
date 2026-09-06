@@ -9,9 +9,7 @@ description = "Installable Python bindings for the ATIBON sovereign defensive fi
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-authors = [
-  { name = "Oligens" }
-]
+authors = [{ name = "Oligens" }]
 keywords = ["firewall", "network-security", "dpi", "rust", "pyo3", "maturin", "atibon"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -37,9 +35,9 @@ Repository = "https://github.com/Oligens/atibon"
 Issues = "https://github.com/Oligens/atibon/issues"
 
 [tool.maturin]
-manifest-path = "../core-rust/Cargo.toml"
+manifest-path = "core-rust/Cargo.toml"
 module-name = "atibon_core._native"
-python-source = "."
-features = []
+python-source = "bridge-python"
 bindings = "pyo3"
+features = []
 strip = true

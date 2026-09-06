@@ -1,0 +1,31 @@
+# ATIBON Linux host baseline.
+# Review allowed ports before applying on a remote server.
+# Validate: sudo nft -c -f /etc/atibon/atibon.nft
+
+table inet atibon {
+  set ssh_abuse {
+    type ipv4_addr
+    flags timeout
+    timeout 1h
+  }
+
+  chain input {
+    type filter hook input priority -100; policy drop;
+    iifname "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+    ip saddr @ssh_abuse drop
+    ip protocol icmp accept
+    ip6 nexthdr icmpv6 accept
+    tcp dport 22 ct state new limit rate 30/minute burst 20 packets accept
+    tcp dport { 80, 443 } ct state new accept
+  }
+
+  chain forward {
+    type filter hook forward priority -100; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority -100; policy accept;
+  }
+}
