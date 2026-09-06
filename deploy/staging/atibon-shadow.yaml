@@ -1,0 +1,22 @@
+apiVersion: atibon.io/v1
+kind: DeploymentProfile
+metadata:
+  name: atibon-shadow
+spec:
+  mode: shadow
+  enforcement:
+    networkBlock: false
+    processQuarantine: false
+    honeypotRedirect: false
+  observe:
+    dpi: true
+    connectionTracking: true
+    anomalyDetection: true
+    audit: true
+  thresholds:
+    maxPacketBytes: 65535
+    maxTrackedFlows: 200000
+    falsePositiveReviewRequired: true
+  promotion:
+    requiredObservations: 10000
+    minimumAvailabilityPercent: 99.99
