@@ -1,0 +1,25 @@
+apiVersion: atibon.io/v1
+kind: ServiceIdentityPolicy
+metadata:
+  name: atibon-production
+spec:
+  mode: strict
+  tls:
+    minimumVersion: TLS1.3
+    requireClientCertificate: true
+    certificateRotationHours: 24
+    rejectUnknownAuthorities: true
+  identity:
+    source: workload-identity
+    audience: atibon-internal
+  network:
+    defaultAction: deny
+    allow:
+      - from: atibon-control
+        to: atibon-agent
+      - from: atibon-agent
+        to: atibon-audit
+  postQuantum:
+    required: true
+    keyExchange: ML-KEM-768
+    signature: ML-DSA-65
