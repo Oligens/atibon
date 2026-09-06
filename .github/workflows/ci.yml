@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   build:
-    name: Build wheels (${{ matrix.platform.os ${{)
-    runs-on: ${{ matrix.platform.os ${{
+    name: Build wheels (${{ matrix.platform.os }})
+    runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
         platform:
@@ -32,13 +32,13 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          target: ${{ matrix.platform.target ${{
+          target: ${{ matrix.platform.target }}
           args: --release --out dist
           sccache: 'true'
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.platform.os ${{
+          name: wheels-${{ matrix.platform.os }}
           path: dist
 
   test:
