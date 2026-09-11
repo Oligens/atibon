@@ -15,9 +15,6 @@ impl PqcFacade {
     pub fn encapsulation_required(&self) -> bool { true }
     pub fn signature_required(&self) -> bool { true }
 
-    /// Signs a barrier digest with a fresh ML-DSA-65 keypair when native PQC is enabled.
-    /// The returned JSON intentionally contains the public verification key and signature;
-    /// the private key never leaves this process.
     pub fn sign_barrier(&self, digest_hex: &str) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
@@ -31,7 +28,7 @@ impl PqcFacade {
                 "public_key_hex": hex(vk.to_bytes().as_ref()),
                 "signature_hex": hex(sig.to_bytes().as_ref())
             });
-            return Ok(payload.to_string());
+            Ok(payload.to_string())
         }
         #[cfg(not(feature = "pqc-native"))]
         {
@@ -40,19 +37,16 @@ impl PqcFacade {
         }
     }
 
-    /// Verifies an ML-DSA-65 barrier signature. This is deliberately separate from
-    /// rule generation so an untrusted node cannot inject a policy without verification.
     pub fn verify_barrier(&self, message: &str, public_key_hex: &str, signature_hex: &str) -> PyResult<bool> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_dsa::{KeyInit, MlDsa65, SignatureEncoding, Verifier, VerifyingKey};
+            use ml_dsa::{KeyInit, MlDsa65, Verifier, VerifyingKey};
             let pk = decode_hex(public_key_hex).map_err(pyo3::exceptions::PyValueError::new_err)?;
             let sig_bytes = decode_hex(signature_hex).map_err(pyo3::exceptions::PyValueError::new_err)?;
             let vk = VerifyingKey::<MlDsa65>::new_from_slice(&pk)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid ML-DSA key: {e}")))?;
-            let sig = <ml_dsa::Signature as SignatureEncoding>::from_bytes(
-                sig_bytes.as_slice().try_into().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid ML-DSA signature length"))?
-            );
+            let sig = <ml_dsa::Signature<MlDsa65> as core::convert::TryFrom<&[u8]>>::try_from(sig_bytes.as_slice())
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid ML-DSA signature: {e}")))?;
             Ok(vk.verify(message.as_bytes(), &sig).is_ok())
         }
         #[cfg(not(feature = "pqc-native"))]
@@ -62,9 +56,6 @@ impl PqcFacade {
         }
     }
 
-    /// Performs a local ML-KEM-768 encapsulation/decapsulation round trip. Production
-    /// transport uses the same primitive with a per-node public key; this method provides
-    /// a deterministic health probe without exposing private key material.
     pub fn kem_health(&self) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
@@ -73,12 +64,12 @@ impl PqcFacade {
             let (ct, send) = ek.encapsulate();
             let recv = dk.decapsulate(&ct);
             if send != recv { return Err(pyo3::exceptions::PyRuntimeError::new_err("ML-KEM-768 round trip failed")); }
-            return Ok(serde_json::json!({
+            Ok(serde_json::json!({
                 "algorithm": "ML-KEM-768",
                 "status": "ok",
                 "ciphertext_bytes": ct.as_ref().len(),
                 "shared_secret_bytes": send.as_ref().len()
-            }).to_string());
+            }).to_string())
         }
         #[cfg(not(feature = "pqc-native"))]
         Err(pyo3::exceptions::PyRuntimeError::new_err("native PQC backend is disabled"))
