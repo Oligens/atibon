@@ -58,7 +58,7 @@ impl ForensicLedger {
         let mut previous = "genesis".to_string();
         for record in &self.records {
             if record.previous_record_hash != previous { return false; }
-            let material = serde_json::to_vec((
+            let material = serde_json::to_vec(&(
                 &record.event_id,
                 record.collected_at_ms,
                 &record.threat_decision_hash,
