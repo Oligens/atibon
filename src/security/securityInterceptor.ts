@@ -87,7 +87,7 @@ export function installSecurityInterceptor(): () => void {
     this: XMLHttpRequest,
     method: string,
     url: string | URL,
-    async = true,
+    async: boolean = true,
     username?: string | null,
     password?: string | null,
   ): void {
