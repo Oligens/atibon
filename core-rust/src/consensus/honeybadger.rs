@@ -40,3 +40,26 @@ impl HoneyBadgerState {
     pub fn quorum(&self) -> u64 { self.quorum }
     pub fn state_hash(&self) -> String { self.state_hash.clone() }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::HoneyBadgerState;
+
+    #[test]
+    fn proposal_is_rejected_below_quorum() {
+        let mut state = HoneyBadgerState::new(3);
+        assert!(!state.propose(b"barrier", 2));
+        assert_eq!(state.accepted(), 0);
+        assert_eq!(state.epoch(), 0);
+        assert!(state.state_hash().is_empty());
+    }
+
+    #[test]
+    fn proposal_commits_at_quorum() {
+        let mut state = HoneyBadgerState::new(3);
+        assert!(state.propose(b"barrier", 3));
+        assert_eq!(state.accepted(), 1);
+        assert_eq!(state.epoch(), 1);
+        assert_eq!(state.state_hash().len(), 64);
+    }
+}
