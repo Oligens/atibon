@@ -23,12 +23,32 @@ class AtibonEngine:
         """Analyze behavioral telemetry and produce a signed-policy candidate envelope.
 
         Enforcement remains fail-closed: callers must explicitly scope the candidate to
-        trusted network context (for example a kernel-observed source IP) before applying it.
+        trusted network context before applying it.
         """
         return json.loads(_native.ced_observe(json.dumps(samples, separators=(",", ":"))))
 
+    def validate_barrier(
+        self,
+        envelope: dict,
+        now_ms: int,
+        current_epoch: int,
+        current_version: int,
+    ) -> dict:
+        """Validate replay/expiry/digest invariants before cryptographic acceptance."""
+        return json.loads(
+            _native.validate_barrier(
+                json.dumps(envelope, separators=(",", ":")),
+                now_ms,
+                current_epoch,
+                current_version,
+            )
+        )
+
     def sign_barrier(self, digest_hex: str) -> dict:
         return json.loads(self.crypto.sign_barrier(digest_hex))
+
+    def verify_barrier(self, message: str, public_key_hex: str, signature_hex: str) -> bool:
+        return bool(self.crypto.verify_barrier(message, public_key_hex, signature_hex))
 
     def pqc_health(self) -> dict:
         return json.loads(self.crypto.kem_health())
