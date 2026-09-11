@@ -21,12 +21,36 @@ class AtibonEngine:
         return json.loads(self.dpi.inspect(packet))
 
     def ced_observe(self, samples: list[dict]) -> dict:
-        """Analyze behavioral telemetry and produce a signed-policy candidate envelope.
-
-        Enforcement remains fail-closed: callers must explicitly scope the candidate to
-        trusted network context before applying it.
-        """
+        """Analyze behavioral telemetry and produce a scoped policy candidate."""
         return json.loads(_native.ced_observe(json.dumps(samples, separators=(",", ":"))))
+
+    def ced_decide(
+        self,
+        samples: list[dict],
+        thresholds: dict | None = None,
+        previous_forensic_hash: str = "genesis",
+    ) -> dict:
+        """Run the multidimensional CED matrix.
+
+        Critical decisions isolate production, freeze the forensic state and emit a
+        quorum-gated vaccination candidate. No firewall rule is applied here.
+        """
+        threshold_payload = thresholds or {}
+        return json.loads(
+            _native.ced_decide(
+                json.dumps(samples, separators=(",", ":")),
+                json.dumps(threshold_payload, separators=(",", ":")),
+                previous_forensic_hash,
+            )
+        )
+
+    def forensic_artifact_digest(self, artifact_id: str, kind: str, data: bytes, collected_at_ms: int) -> dict:
+        """Create a tamper-evident digest for an authorized local artifact.
+
+        The raw artifact is never returned by the native helper; only its SHA-256
+        evidence digest is exposed to the chain-of-custody layer.
+        """
+        return json.loads(_native.forensic_artifact_digest(artifact_id, kind, data, collected_at_ms))
 
     def validate_barrier(
         self,
@@ -68,12 +92,7 @@ class AtibonEngine:
         approvals: int,
         issued_at_ms: int,
     ) -> dict:
-        """Commit a barrier through quorum, then seal it for one recipient.
-
-        The cryptographic envelope is never produced if the quorum is not reached.
-        The returned envelope binds the consensus state hash into its signature and
-        AEAD key derivation, so an envelope cannot be detached from the committed state.
-        """
+        """Commit a barrier through quorum, then seal it for one recipient."""
         candidate = dict(policy)
         candidate["epoch"] = self.consensus.epoch() + 1
         version = int(candidate.get("version", 0))
