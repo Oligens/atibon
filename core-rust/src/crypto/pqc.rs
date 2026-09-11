@@ -15,20 +15,26 @@ impl PqcFacade {
     pub fn encapsulation_required(&self) -> bool { true }
     pub fn signature_required(&self) -> bool { true }
 
+    /// Signs a barrier digest using an operator-managed ML-DSA-65 seed.
+    /// The seed is read from ATIBON_MLDSA65_SEED_HEX and is never returned.
     pub fn sign_barrier(&self, digest_hex: &str) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_dsa::{Generate, KeyExport, MlDsa65, Signer};
-            let sk = ml_dsa::SigningKey::<MlDsa65>::generate();
+            use ml_dsa::{KeyExport, KeyInit, MlDsa65, Signer, SigningKey};
+            let seed_hex = std::env::var("ATIBON_MLDSA65_SEED_HEX")
+                .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("ATIBON_MLDSA65_SEED_HEX is not configured"))?;
+            let seed = decode_hex(&seed_hex).map_err(pyo3::exceptions::PyValueError::new_err)?;
+            if seed.len() != 32 { return Err(pyo3::exceptions::PyValueError::new_err("ML-DSA-65 seed must be exactly 32 bytes")); }
+            let sk = SigningKey::<MlDsa65>::new_from_slice(&seed)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("invalid ML-DSA seed: {e}")))?;
             let sig = sk.sign(digest_hex.as_bytes());
             let vk = sk.verifying_key();
-            let payload = serde_json::json!({
+            Ok(serde_json::json!({
                 "algorithm": "ML-DSA-65",
                 "message": digest_hex,
                 "public_key_hex": hex(vk.to_bytes().as_ref()),
                 "signature_hex": hex(sig.to_bytes().as_ref())
-            });
-            Ok(payload.to_string())
+            }).to_string())
         }
         #[cfg(not(feature = "pqc-native"))]
         {
