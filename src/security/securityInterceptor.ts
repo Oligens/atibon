@@ -15,6 +15,15 @@ let triggered = false;
 
 type AtibonBlockedXHR = XMLHttpRequest & { __atibonBlocked?: boolean };
 
+type OriginalXHROpen = (
+  this: XMLHttpRequest,
+  method: string,
+  url: string | URL,
+  async?: boolean,
+  username?: string | null,
+  password?: string | null,
+) => void;
+
 function normalizePath(input: string): string {
   try {
     return decodeURIComponent(new URL(input, window.location.origin).pathname);
@@ -81,13 +90,14 @@ export function installSecurityInterceptor(): () => void {
   }) as typeof window.fetch;
 
   const originalOpen = XMLHttpRequest.prototype.open;
+  const safeOriginalOpen = originalOpen as unknown as OriginalXHROpen;
   const originalSend = XMLHttpRequest.prototype.send;
 
   XMLHttpRequest.prototype.open = function (
     this: XMLHttpRequest,
     method: string,
     url: string | URL,
-    async = true,
+    async: boolean = true,
     username?: string | null,
     password?: string | null,
   ): void {
@@ -96,9 +106,9 @@ export function installSecurityInterceptor(): () => void {
     }
 
     if (username !== undefined || password !== undefined) {
-      originalOpen.call(this, method, url, async, username ?? null, password ?? null);
+      safeOriginalOpen.call(this, method, url, Boolean(async), username ?? null, password ?? null);
     } else {
-      originalOpen.call(this, method, url, async);
+      safeOriginalOpen.call(this, method, url, Boolean(async));
     }
   };
 
