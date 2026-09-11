@@ -84,6 +84,22 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets
 
+  pqc-transport:
+    name: Native PQC transport verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Test ML-KEM / ML-DSA transport
+        run: cargo test -p atibon-core --features pqc-native
+      - name: Check PQC agent
+        run: cargo check -p atibon-core --features pqc-native --bin atibon-agent
+      - name: Clippy PQC
+        run: cargo clippy -p atibon-core --features pqc-native --all-targets -- -D warnings
+
   frontend:
     name: Front-end verification
     runs-on: ubuntu-latest

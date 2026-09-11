@@ -1,8 +1,10 @@
 pub mod audit;
+pub mod ced;
 pub mod conntrack;
 pub mod dpi;
 pub mod consensus;
 pub mod crypto;
+pub mod forensic;
 pub mod rules;
 pub mod shadow;
 
@@ -33,12 +35,93 @@ fn assess_shadow_url(url: &str) -> PyResult<String> {
         .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
+#[pyfunction]
+fn ced_observe(samples_json: &str) -> PyResult<String> {
+    let samples: Vec<ced::TelemetrySample> = serde_json::from_str(samples_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    serde_json::to_string(&ced::observe(&samples))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+#[pyo3(signature = (samples_json, thresholds_json = "{}", previous_forensic_hash = "genesis"))]
+fn ced_decide(samples_json: &str, thresholds_json: &str, previous_forensic_hash: &str) -> PyResult<String> {
+    let samples: Vec<ced::TelemetrySample> = serde_json::from_str(samples_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let thresholds: ced::ThreatThresholdConfig = serde_json::from_str(thresholds_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let decision = ced::decide(&samples, &thresholds, previous_forensic_hash);
+    serde_json::to_string(&decision)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn forensic_artifact_digest(id: &str, kind: &str, bytes: &[u8], collected_at_ms: u64) -> PyResult<String> {
+    serde_json::to_string(&forensic::artifact_from_bytes(id, kind, bytes, collected_at_ms))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn validate_barrier(envelope_json: &str, now_ms: u64, current_epoch: u64, current_version: u64) -> PyResult<String> {
+    let envelope: crypto::transport::BarrierEnvelope = serde_json::from_str(envelope_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let result = crypto::transport::validate_envelope(&envelope, now_ms, current_epoch, current_version)
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    serde_json::to_string(&result)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn seal_barrier(
+    policy_json: &str,
+    sender_node_id: &str,
+    recipient_node_id: &str,
+    key_id: &str,
+    recipient_kem_public_key_hex: &str,
+    consensus_hash: &str,
+    issued_at_ms: u64,
+) -> PyResult<String> {
+    let policy: crypto::transport::BarrierPolicy = serde_json::from_str(policy_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let envelope = crypto::transport::seal_barrier(
+        &policy, sender_node_id, recipient_node_id, key_id,
+        recipient_kem_public_key_hex, consensus_hash, issued_at_ms,
+    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
+    serde_json::to_string(&envelope)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn open_barrier(
+    envelope_json: &str,
+    recipient_kem_private_key_hex: &str,
+    trusted_signer_public_key_hex: &str,
+    now_ms: u64,
+    current_epoch: u64,
+    current_version: u64,
+) -> PyResult<String> {
+    let envelope: crypto::transport::BarrierEnvelope = serde_json::from_str(envelope_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let result = crypto::transport::open_barrier(
+        &envelope, recipient_kem_private_key_hex, trusted_signer_public_key_hex,
+        now_ms, current_epoch, current_version,
+    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
+    serde_json::to_string(&result)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(inspect_packet, m)?)?;
     m.add_function(wrap_pyfunction!(decide_flow, m)?)?;
     m.add_function(wrap_pyfunction!(assess_shadow_url, m)?)?;
+    m.add_function(wrap_pyfunction!(ced_observe, m)?)?;
+    m.add_function(wrap_pyfunction!(ced_decide, m)?)?;
+    m.add_function(wrap_pyfunction!(forensic_artifact_digest, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_barrier, m)?)?;
+    m.add_function(wrap_pyfunction!(seal_barrier, m)?)?;
+    m.add_function(wrap_pyfunction!(open_barrier, m)?)?;
     m.add_class::<dpi::DpiEngine>()?;
     m.add_class::<consensus::HoneyBadgerState>()?;
     m.add_class::<crypto::PqcFacade>()?;
