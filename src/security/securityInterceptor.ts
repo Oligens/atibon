@@ -85,28 +85,33 @@ export function installSecurityInterceptor(): () => void {
 
   XMLHttpRequest.prototype.open = function (
     this: XMLHttpRequest,
-    ...args: Parameters<typeof XMLHttpRequest.prototype.open>
-  ): ReturnType<typeof XMLHttpRequest.prototype.open> {
-    const [method, url, async, username, password] = args;
+    method: string,
+    url: string | URL,
+    async = true,
+    username?: string | null,
+    password?: string | null,
+  ): void {
     if (inspectNavigation(String(url), method, "xhr")) {
       (this as AtibonBlockedXHR).__atibonBlocked = true;
     }
 
-    // Call with explicit arguments instead of spreading an overloaded DOM tuple.
-    return originalOpen.call(this, method, url, async, username, password);
+    if (username !== undefined || password !== undefined) {
+      originalOpen.call(this, method, url, async, username ?? null, password ?? null);
+    } else {
+      originalOpen.call(this, method, url, async);
+    }
   };
 
   XMLHttpRequest.prototype.send = function (
     this: XMLHttpRequest,
-    ...args: Parameters<typeof XMLHttpRequest.prototype.send>
-  ): ReturnType<typeof XMLHttpRequest.prototype.send> {
+    body?: Document | XMLHttpRequestBodyInit | null,
+  ): void {
     if ((this as AtibonBlockedXHR).__atibonBlocked) {
       this.abort();
-      return undefined;
+      return;
     }
 
-    // send() has one optional body argument; passing it explicitly avoids TS2556.
-    return originalSend.call(this, args[0]);
+    originalSend.call(this, body);
   };
 
   const onClick = (event: MouseEvent): void => {
@@ -145,7 +150,6 @@ export function installSecurityInterceptor(): () => void {
   document.addEventListener("click", onClick, true);
   window.addEventListener("popstate", onPopState);
 
-  // A direct navigation that reached the SPA fallback is still a source-probing attempt.
   if (isSensitive(window.location.pathname)) reportThreat(window.location.pathname, "GET", "direct-navigation");
 
   return () => {
