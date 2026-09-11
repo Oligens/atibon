@@ -42,6 +42,16 @@ fn ced_observe(samples_json: &str) -> PyResult<String> {
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
+#[pyfunction]
+fn validate_barrier(envelope_json: &str, now_ms: u64, current_epoch: u64, current_version: u64) -> PyResult<String> {
+    let envelope: crypto::transport::BarrierEnvelope = serde_json::from_str(envelope_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let result = crypto::transport::validate_envelope(&envelope, now_ms, current_epoch, current_version)
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    serde_json::to_string(&result)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
@@ -49,6 +59,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(decide_flow, m)?)?;
     m.add_function(wrap_pyfunction!(assess_shadow_url, m)?)?;
     m.add_function(wrap_pyfunction!(ced_observe, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_barrier, m)?)?;
     m.add_class::<dpi::DpiEngine>()?;
     m.add_class::<consensus::HoneyBadgerState>()?;
     m.add_class::<crypto::PqcFacade>()?;
