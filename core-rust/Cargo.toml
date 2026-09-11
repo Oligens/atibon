@@ -1,6 +1,6 @@
 [package]
 name = "atibon-core"
-version = "3.0.0"
+version = "3.1.0"
 edition = "2021"
 description = "ATIBON sovereign defensive firewall core"
 license = "Apache-2.0"
@@ -20,9 +20,14 @@ serde_json = "1.0"
 sha2 = "0.10"
 thiserror = "1.0"
 
+# NIST FIPS-203 / FIPS-204 implementations. Kept behind the native-PQC feature so
+# minimal deployments can still build the firewall core without pulling PQC code.
+ml-kem = { version = "0.3.2", optional = true, features = ["getrandom"] }
+ml-dsa = { version = "0.1.1", optional = true, features = ["getrandom"] }
+
 [features]
 default = []
-pqc-native = []
+pqc-native = ["dep:ml-kem", "dep:ml-dsa"]
 hsm-pkcs11 = []
 tpm2-native = []
 ebpf-aya = []
