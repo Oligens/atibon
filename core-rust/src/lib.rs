@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod ced;
 pub mod conntrack;
 pub mod dpi;
 pub mod consensus;
@@ -33,12 +34,21 @@ fn assess_shadow_url(url: &str) -> PyResult<String> {
         .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
+#[pyfunction]
+fn ced_observe(samples_json: &str) -> PyResult<String> {
+    let samples: Vec<ced::TelemetrySample> = serde_json::from_str(samples_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    serde_json::to_string(&ced::observe(&samples))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(inspect_packet, m)?)?;
     m.add_function(wrap_pyfunction!(decide_flow, m)?)?;
     m.add_function(wrap_pyfunction!(assess_shadow_url, m)?)?;
+    m.add_function(wrap_pyfunction!(ced_observe, m)?)?;
     m.add_class::<dpi::DpiEngine>()?;
     m.add_class::<consensus::HoneyBadgerState>()?;
     m.add_class::<crypto::PqcFacade>()?;
