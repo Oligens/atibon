@@ -5,6 +5,7 @@ pub mod dpi;
 pub mod consensus;
 pub mod crypto;
 pub mod forensic;
+pub mod adaptive;
 pub mod rules;
 pub mod shadow;
 
@@ -56,6 +57,26 @@ fn ced_decide(samples_json: &str, thresholds_json: &str, previous_forensic_hash:
 }
 
 #[pyfunction]
+fn marl_simulate(seed: &[u8], prior_risk: f64) -> PyResult<String> {
+    serde_json::to_string(&adaptive::simulate_episode(seed, prior_risk))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn semantic_mtd(seed: &[u8], version: u64, fields_json: &str) -> PyResult<String> {
+    let fields: Vec<String> = serde_json::from_str(fields_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    serde_json::to_string(&adaptive::generate_semantic_variant(seed, version, &fields))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn optimize_defensive_topology(seed: &[u8], iterations: usize) -> PyResult<String> {
+    serde_json::to_string(&adaptive::optimize_topology(seed, iterations))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
 fn forensic_artifact_digest(id: &str, kind: &str, bytes: &[u8], collected_at_ms: u64) -> PyResult<String> {
     serde_json::to_string(&forensic::artifact_from_bytes(id, kind, bytes, collected_at_ms))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
@@ -72,42 +93,21 @@ fn validate_barrier(envelope_json: &str, now_ms: u64, current_epoch: u64, curren
 }
 
 #[pyfunction]
-fn seal_barrier(
-    policy_json: &str,
-    sender_node_id: &str,
-    recipient_node_id: &str,
-    key_id: &str,
-    recipient_kem_public_key_hex: &str,
-    consensus_hash: &str,
-    issued_at_ms: u64,
-) -> PyResult<String> {
+fn seal_barrier(policy_json: &str, sender_node_id: &str, recipient_node_id: &str, key_id: &str, recipient_kem_public_key_hex: &str, consensus_hash: &str, issued_at_ms: u64) -> PyResult<String> {
     let policy: crypto::transport::BarrierPolicy = serde_json::from_str(policy_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let envelope = crypto::transport::seal_barrier(
-        &policy, sender_node_id, recipient_node_id, key_id,
-        recipient_kem_public_key_hex, consensus_hash, issued_at_ms,
-    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
-    serde_json::to_string(&envelope)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    let envelope = crypto::transport::seal_barrier(&policy, sender_node_id, recipient_node_id, key_id, recipient_kem_public_key_hex, consensus_hash, issued_at_ms)
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    serde_json::to_string(&envelope).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
-fn open_barrier(
-    envelope_json: &str,
-    recipient_kem_private_key_hex: &str,
-    trusted_signer_public_key_hex: &str,
-    now_ms: u64,
-    current_epoch: u64,
-    current_version: u64,
-) -> PyResult<String> {
+fn open_barrier(envelope_json: &str, recipient_kem_private_key_hex: &str, trusted_signer_public_key_hex: &str, now_ms: u64, current_epoch: u64, current_version: u64) -> PyResult<String> {
     let envelope: crypto::transport::BarrierEnvelope = serde_json::from_str(envelope_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let result = crypto::transport::open_barrier(
-        &envelope, recipient_kem_private_key_hex, trusted_signer_public_key_hex,
-        now_ms, current_epoch, current_version,
-    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
-    serde_json::to_string(&result)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    let result = crypto::transport::open_barrier(&envelope, recipient_kem_private_key_hex, trusted_signer_public_key_hex, now_ms, current_epoch, current_version)
+        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    serde_json::to_string(&result).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pymodule]
@@ -118,6 +118,9 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(assess_shadow_url, m)?)?;
     m.add_function(wrap_pyfunction!(ced_observe, m)?)?;
     m.add_function(wrap_pyfunction!(ced_decide, m)?)?;
+    m.add_function(wrap_pyfunction!(marl_simulate, m)?)?;
+    m.add_function(wrap_pyfunction!(semantic_mtd, m)?)?;
+    m.add_function(wrap_pyfunction!(optimize_defensive_topology, m)?)?;
     m.add_function(wrap_pyfunction!(forensic_artifact_digest, m)?)?;
     m.add_function(wrap_pyfunction!(validate_barrier, m)?)?;
     m.add_function(wrap_pyfunction!(seal_barrier, m)?)?;
