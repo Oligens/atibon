@@ -49,12 +49,6 @@ jobs:
       - name: JavaScript dependency audit
         run: npm install && npm audit --audit-level=high
 
-  dependency-review:
-    if: github.event_name == 'pull_request'
-    name: Dependency review
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/dependency-review-action@v4
+# GitHub Dependency Review is intentionally not invoked here because the repository
+# currently has Dependency Graph/Dependency Review disabled. RustSec + npm audit
+# provide an executable dependency gate without requiring repository settings changes.
