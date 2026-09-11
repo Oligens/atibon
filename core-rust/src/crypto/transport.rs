@@ -270,7 +270,7 @@ pub fn open_barrier(
     salt_input.extend_from_slice(envelope.consensus_hash.as_bytes());
     let salt = Sha256::digest(&salt_input);
     let hk = Hkdf::<Sha256>::new(Some(&salt), shared_secret.as_ref());
-    let mut aead_key = [0u8; 32];
+    let mut aead_key = vec![0u8; 32];
     hk.expand(b"ATIBON-BARRIER/2|ML-KEM-768|CHACHA20-POLY1305", &mut aead_key)
         .map_err(|_| "HKDF expansion failed".to_string())?;
 
