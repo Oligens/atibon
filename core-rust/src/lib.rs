@@ -4,6 +4,7 @@ pub mod conntrack;
 pub mod dpi;
 pub mod consensus;
 pub mod crypto;
+pub mod forensic;
 pub mod rules;
 pub mod shadow;
 
@@ -39,6 +40,24 @@ fn ced_observe(samples_json: &str) -> PyResult<String> {
     let samples: Vec<ced::TelemetrySample> = serde_json::from_str(samples_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     serde_json::to_string(&ced::observe(&samples))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+#[pyo3(signature = (samples_json, thresholds_json = "{}", previous_forensic_hash = "genesis"))]
+fn ced_decide(samples_json: &str, thresholds_json: &str, previous_forensic_hash: &str) -> PyResult<String> {
+    let samples: Vec<ced::TelemetrySample> = serde_json::from_str(samples_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let thresholds: ced::ThreatThresholdConfig = serde_json::from_str(thresholds_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let decision = ced::decide(&samples, &thresholds, previous_forensic_hash);
+    serde_json::to_string(&decision)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn forensic_artifact_digest(id: &str, kind: &str, bytes: &[u8], collected_at_ms: u64) -> PyResult<String> {
+    serde_json::to_string(&forensic::artifact_from_bytes(id, kind, bytes, collected_at_ms))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -98,6 +117,8 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(decide_flow, m)?)?;
     m.add_function(wrap_pyfunction!(assess_shadow_url, m)?)?;
     m.add_function(wrap_pyfunction!(ced_observe, m)?)?;
+    m.add_function(wrap_pyfunction!(ced_decide, m)?)?;
+    m.add_function(wrap_pyfunction!(forensic_artifact_digest, m)?)?;
     m.add_function(wrap_pyfunction!(validate_barrier, m)?)?;
     m.add_function(wrap_pyfunction!(seal_barrier, m)?)?;
     m.add_function(wrap_pyfunction!(open_barrier, m)?)?;
