@@ -74,7 +74,9 @@ export function installSecurityInterceptor(): () => void {
   const originalFetch = window.fetch.bind(window);
   window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const target = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (inspectNavigation(target, init?.method ?? (input instanceof Request ? input.method : "GET"), "fetch")) {
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+    const blocked: boolean = Boolean(inspectNavigation(target, method, "fetch"));
+    if (blocked) {
       return Promise.reject(new DOMException("ATIBON request intercepted", "SecurityError"));
     }
     return originalFetch(input, init);
@@ -91,7 +93,8 @@ export function installSecurityInterceptor(): () => void {
     username?: string | null,
     password?: string | null,
   ): void {
-    if (inspectNavigation(String(url), method, "xhr")) {
+    const blocked: boolean = Boolean(inspectNavigation(String(url), method, "xhr"));
+    if (blocked) {
       (this as AtibonBlockedXHR).__atibonBlocked = true;
     }
 
@@ -106,7 +109,8 @@ export function installSecurityInterceptor(): () => void {
     this: XMLHttpRequest,
     body?: Document | XMLHttpRequestBodyInit | null,
   ): void {
-    if (Boolean((this as AtibonBlockedXHR).__atibonBlocked)) {
+    const blocked: boolean = Boolean((this as AtibonBlockedXHR).__atibonBlocked);
+    if (blocked) {
       this.abort();
       return;
     }
@@ -119,23 +123,31 @@ export function installSecurityInterceptor(): () => void {
     if (!anchor) return;
     const url = new URL(anchor.href, window.location.origin);
     if (url.origin !== window.location.origin) return;
-    if (inspectNavigation(url.href, "GET", "link")) event.preventDefault();
+    const blocked: boolean = Boolean(inspectNavigation(url.href, "GET", "link"));
+    if (blocked) event.preventDefault();
   };
 
   const onPopState = (): void => {
-    if (inspectNavigation(window.location.href, "GET", "history")) return;
+    const blocked: boolean = Boolean(inspectNavigation(window.location.href, "GET", "history"));
+    if (blocked) return;
   };
 
   const originalPushState = history.pushState.bind(history);
   const originalReplaceState = history.replaceState.bind(history);
 
   history.pushState = ((state: any, title: string, url?: string | URL | null): void => {
-    if (url != null && inspectNavigation(String(url), "GET", "history")) return;
+    const blocked: boolean = url != null
+      ? Boolean(inspectNavigation(String(url), "GET", "history"))
+      : false;
+    if (blocked) return;
     Reflect.apply(originalPushState, history, [state, title, url ?? null]);
   }) as History["pushState"];
 
   history.replaceState = ((state: any, title: string, url?: string | URL | null): void => {
-    if (url != null && inspectNavigation(String(url), "GET", "history")) return;
+    const blocked: boolean = url != null
+      ? Boolean(inspectNavigation(String(url), "GET", "history"))
+      : false;
+    if (blocked) return;
     Reflect.apply(originalReplaceState, history, [state, title, url ?? null]);
   }) as History["replaceState"];
 
