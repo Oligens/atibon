@@ -1,3 +1,4 @@
+pub mod agents;
 pub mod audit;
 pub mod ced;
 pub mod conntrack;
@@ -5,6 +6,8 @@ pub mod dpi;
 pub mod consensus;
 pub mod crypto;
 pub mod forensic;
+pub mod learning;
+pub mod matrix_gateway;
 pub mod rules;
 pub mod shadow;
 
@@ -88,7 +91,7 @@ fn seal_barrier(
         recipient_kem_public_key_hex, consensus_hash, issued_at_ms,
     ).map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&envelope)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
 #[pyfunction]
@@ -107,6 +110,37 @@ fn open_barrier(
         now_ms, current_epoch, current_version,
     ).map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&result)
+        .map_err(pyo3::exceptions::PyRuntimeError::new_err)
+}
+
+#[pyfunction]
+fn matrix_gateway_process(packet: &[u8]) -> PyResult<String> {
+    matrix_gateway::process(packet)
+        .and_then(|v| serde_json::to_string(&v).map_err(|e| e.to_string()))
+        .map_err(pyo3::exceptions::PyRuntimeError::new_err)
+}
+
+#[pyfunction]
+fn generate_dynamic_barriers(generation: u64, scope: &str, now_ms: u64) -> PyResult<String> {
+    serde_json::to_string(&matrix_gateway::generate_barriers(generation, scope, now_ms))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn recurse_dynamic_barriers(generation: u64, scope: &str, now_ms: u64) -> PyResult<String> {
+    serde_json::to_string(&matrix_gateway::recursion_after_breach(generation, scope, now_ms))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn list_defensive_agents() -> PyResult<String> {
+    serde_json::to_string(agents::descriptors())
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
+fn agent_consensus(anomaly_score: f64, crypto_violation: bool, repeated_behavior: bool) -> PyResult<String> {
+    serde_json::to_string(&agents::consensus(anomaly_score, crypto_violation, repeated_behavior))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
@@ -122,6 +156,11 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validate_barrier, m)?)?;
     m.add_function(wrap_pyfunction!(seal_barrier, m)?)?;
     m.add_function(wrap_pyfunction!(open_barrier, m)?)?;
+    m.add_function(wrap_pyfunction!(matrix_gateway_process, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_dynamic_barriers, m)?)?;
+    m.add_function(wrap_pyfunction!(recurse_dynamic_barriers, m)?)?;
+    m.add_function(wrap_pyfunction!(list_defensive_agents, m)?)?;
+    m.add_function(wrap_pyfunction!(agent_consensus, m)?)?;
     m.add_class::<dpi::DpiEngine>()?;
     m.add_class::<consensus::HoneyBadgerState>()?;
     m.add_class::<crypto::PqcFacade>()?;
