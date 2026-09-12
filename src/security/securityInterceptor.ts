@@ -5,7 +5,7 @@ const SENSITIVE_PATHS = [
   /(^|\/)\.git(?:\/|$)/i,
   /(^|\/)\.env(?:\.|\/|$)/i,
   /(^|\/)(?:src|core-rust|bridge-python|ml-engine|zero-trust|deploy)(?:\/|$)/i,
-  /(^|\/)(?:package(?:-lock)?\.json|Cargo\.toml|Cargo\.lock|tsconfig(?:\.[^/]+)?\.json|vite\.config\.[^/]+|webpack\.config\.[^/]+)(?:$|\?)/i,
+  /(^|\/)(?:package(?:-lock)?\.json|Cargo.toml|Cargo.lock|tsconfig(?:\.[^/]+)?\.json|vite.config\.[^/]+|webpack.config\.[^/]+)(?:$|\?)/i,
   /\.(?:map|rs|tsx?|jsx?|py|toml|lock)$/i,
   /(?:source|debug|dump|inspect|dissect|__webpack|__vite|\.git)/i,
 ];
@@ -129,25 +129,15 @@ export function installSecurityInterceptor(): () => void {
   const originalPushState = history.pushState.bind(history);
   const originalReplaceState = history.replaceState.bind(history);
 
-  history.pushState = function (
-    this: History,
-    state: unknown,
-    title: string,
-    url?: string | URL | null,
-  ): void {
+  history.pushState = ((state: any, title: string, url?: string | URL | null): void => {
     if (url != null && inspectNavigation(String(url), "GET", "history")) return;
-    originalPushState.call(this, state, title, url ?? null);
-  };
+    Reflect.apply(originalPushState, history, [state, title, url ?? null]);
+  }) as History["pushState"];
 
-  history.replaceState = function (
-    this: History,
-    state: unknown,
-    title: string,
-    url?: string | URL | null,
-  ): void {
+  history.replaceState = ((state: any, title: string, url?: string | URL | null): void => {
     if (url != null && inspectNavigation(String(url), "GET", "history")) return;
-    originalReplaceState.call(this, state, title, url ?? null);
-  };
+    Reflect.apply(originalReplaceState, history, [state, title, url ?? null]);
+  }) as History["replaceState"];
 
   document.addEventListener("click", onClick, true);
   window.addEventListener("popstate", onPopState);
