@@ -20,7 +20,7 @@ impl PqcFacade {
     pub fn sign_barrier(&self, digest_hex: &str) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_dsa::{KeyExport, KeyInit, MlDsa65, Signer, SigningKey};
+            use ml_dsa::{KeyExport, KeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey};
             let seed_hex = std::env::var("ATIBON_MLDSA65_SEED_HEX")
                 .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("ATIBON_MLDSA65_SEED_HEX is not configured"))?;
             let seed = decode_hex(&seed_hex).map_err(pyo3::exceptions::PyValueError::new_err)?;
@@ -46,7 +46,7 @@ impl PqcFacade {
     pub fn verify_barrier(&self, message: &str, public_key_hex: &str, signature_hex: &str) -> PyResult<bool> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_dsa::{KeyInit, MlDsa65, Verifier, VerifyingKey};
+            use ml_dsa::{KeyInit, MlDsa65, SignatureEncoding, Verifier, VerifyingKey};
             let pk = decode_hex(public_key_hex).map_err(pyo3::exceptions::PyValueError::new_err)?;
             let sig_bytes = decode_hex(signature_hex).map_err(pyo3::exceptions::PyValueError::new_err)?;
             let vk = VerifyingKey::<MlDsa65>::new_from_slice(&pk)
@@ -73,7 +73,7 @@ impl PqcFacade {
             Ok(serde_json::json!({
                 "algorithm": "ML-KEM-768",
                 "status": "ok",
-                "ciphertext_bytes": ct.as_ref().len(),
+                "ciphertext_bytes": ct.as_slice().len(),
                 "shared_secret_bytes": send.as_ref().len()
             }).to_string())
         }
