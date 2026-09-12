@@ -1,3 +1,7 @@
+#![allow(clippy::map_flatten)]
+#![allow(clippy::needless_range_loop)]
+#![allow(unused_imports)]
+
 pub mod agents;
 pub mod audit;
 pub mod ced;
