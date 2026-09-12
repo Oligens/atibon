@@ -160,16 +160,15 @@ pub fn seal_barrier(
 ) -> Result<BarrierEnvelope, String> {
     use chacha20poly1305::{aead::{Aead, Generate, KeyInit, Payload}, ChaCha20Poly1305, Nonce};
     use hkdf::Hkdf;
-    use ml_dsa::{KeyExport, KeyInit as DsaKeyInit, MlDsa65, Signer, SigningKey};
-    use ml_kem::{kem::{Encapsulate, Kem}, Encoded, KemCore, MlKem768};
+    use ml_dsa::{KeyExport, KeyInit as DsaKeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey};
+    use ml_kem::{kem::{Encapsulate, Kem, EncapsulationKey}, MlKem768, TryKeyInit};
 
     let digest = policy_digest(policy)?;
     if !is_fixed_hex(consensus_hash, 32) { return Err("consensus hash must be 32-byte hex".into()); }
     let public_key = decode_hex(recipient_kem_public_key_hex)?;
     if public_key.len() != 1184 { return Err("ML-KEM-768 public key must be 1184 bytes".into()); }
-    let encoded = <Encoded<<MlKem768 as KemCore>::EncapsulationKey>>::try_from(public_key.as_slice())
+    let ek = EncapsulationKey::<MlKem768>::new_from_slice(&public_key)
         .map_err(|_| "invalid ML-KEM-768 public key encoding".to_string())?;
-    let ek = <MlKem768 as KemCore>::EncapsulationKey::from_bytes(&encoded);
     let (kem_ct, shared_secret) = ek.encapsulate();
 
     let mut salt_input = Vec::with_capacity(digest.len() + consensus_hash.len());
@@ -183,25 +182,12 @@ pub fn seal_barrier(
 
     let nonce = Nonce::generate();
     let mut envelope = BarrierEnvelope {
-        protocol: PROTOCOL.into(),
-        sender_node_id: sender_node_id.into(),
-        recipient_node_id: recipient_node_id.into(),
-        key_id: key_id.into(),
-        policy_id: policy.policy_id.clone(),
-        version: policy.version,
-        epoch: policy.epoch,
-        issued_at_ms,
-        expires_at_ms: policy.expires_at_ms,
-        kem_algorithm: KEM_ALGORITHM.into(),
-        aead_algorithm: AEAD_ALGORITHM.into(),
-        signature_algorithm: SIGNATURE_ALGORITHM.into(),
-        kem_ciphertext_hex: hex(kem_ct.as_ref()),
-        nonce_hex: hex(nonce.as_ref()),
-        ciphertext_hex: String::new(),
-        policy_digest: digest,
-        consensus_hash: consensus_hash.into(),
-        signer_public_key_hex: String::new(),
-        signature_hex: String::new(),
+        protocol: PROTOCOL.into(), sender_node_id: sender_node_id.into(), recipient_node_id: recipient_node_id.into(),
+        key_id: key_id.into(), policy_id: policy.policy_id.clone(), version: policy.version, epoch: policy.epoch,
+        issued_at_ms, expires_at_ms: policy.expires_at_ms, kem_algorithm: KEM_ALGORITHM.into(),
+        aead_algorithm: AEAD_ALGORITHM.into(), signature_algorithm: SIGNATURE_ALGORITHM.into(),
+        kem_ciphertext_hex: hex(kem_ct.as_ref()), nonce_hex: hex(nonce.as_ref()), ciphertext_hex: String::new(),
+        policy_digest: digest, consensus_hash: consensus_hash.into(), signer_public_key_hex: String::new(), signature_hex: String::new(),
     };
     let cipher = ChaCha20Poly1305::new_from_slice(&aead_key).map_err(|_| "invalid AEAD key".to_string())?;
     let aad = header_bytes(&envelope)?;
@@ -241,8 +227,8 @@ pub fn open_barrier(
 ) -> Result<OpenedBarrier, String> {
     use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, ChaCha20Poly1305, Nonce};
     use hkdf::Hkdf;
-    use ml_dsa::{KeyInit as DsaKeyInit, MlDsa65, Signature, Verifier, VerifyingKey};
-    use ml_kem::{kem::{Decapsulate, Kem}, Encoded, KemCore, MlKem768};
+    use ml_dsa::{KeyInit as DsaKeyInit, MlDsa65, Signature, SignatureEncoding, Verifier, VerifyingKey};
+    use ml_kem::{kem::{Decapsulate, Kem, DecapsulationKey}, MlKem768, TryKeyInit};
 
     validate_envelope(envelope, now_ms, current_epoch, current_version)?;
     let trusted = decode_hex(trusted_signer_public_key_hex)?;
@@ -257,9 +243,8 @@ pub fn open_barrier(
 
     let private_key = decode_hex(recipient_kem_private_key_hex)?;
     if private_key.len() != 2400 { return Err("ML-KEM-768 decapsulation key must be 2400 bytes".into()); }
-    let dk_encoded = <Encoded<<MlKem768 as KemCore>::DecapsulationKey>>::try_from(private_key.as_slice())
+    let dk = DecapsulationKey::<MlKem768>::new_from_slice(&private_key)
         .map_err(|_| "invalid ML-KEM-768 decapsulation key encoding".to_string())?;
-    let dk = <MlKem768 as KemCore>::DecapsulationKey::from_bytes(&dk_encoded);
     let kem_ct_bytes = decode_hex(&envelope.kem_ciphertext_hex)?;
     let kem_ct = ml_kem::Ciphertext::<MlKem768>::try_from(kem_ct_bytes.as_slice())
         .map_err(|_| "invalid ML-KEM-768 ciphertext".to_string())?;
