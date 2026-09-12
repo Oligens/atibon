@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   format-once:
-    if: github.sha == 'b55fcff1d1f13a271b8d1664d2e17425d161ad5e'
+    if: contains(github.event.head_commit.message, 'run one-time rustfmt normalization')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
