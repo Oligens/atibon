@@ -31,7 +31,7 @@ impl PqcFacade {
     pub fn sign_barrier(&self, digest_hex: &str) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_dsa::{KeyExport, Keypair, MlDsa65, Signer, SigningKey};
+            use ml_dsa::{Keypair, MlDsa65, Signer, SigningKey};
 
             let seed_hex = std::env::var("ATIBON_MLDSA65_SEED_HEX").map_err(|_| {
                 pyo3::exceptions::PyRuntimeError::new_err(
@@ -54,7 +54,7 @@ impl PqcFacade {
                 "algorithm": "ML-DSA-65",
                 "message": digest_hex,
                 "public_key_hex": hex(vk.encode().as_ref()),
-                "signature_hex": hex(sig.to_bytes().as_ref())
+                "signature_hex": hex(sig.encode().as_ref())
             })
             .to_string())
         }
