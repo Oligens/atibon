@@ -1,0 +1,34 @@
+name: ATIBON one-time Rust format
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  format-once:
+    if: github.sha == '391fce8c39e99ac6c0db8fc827313cd10d868f50'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+      - name: Apply cargo fmt
+        run: cargo fmt --all
+      - name: Commit normalized Rust formatting
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Rust sources are already formatted."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add core-rust
+          git commit -m "style: normalize Rust formatting [skip ci]"
+          git push
