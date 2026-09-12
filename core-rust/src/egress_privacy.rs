@@ -39,12 +39,16 @@ pub struct EgressDecision {
     pub header_spoofing: bool,
 }
 
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 fn identity_token(destination: &str, request_epoch: u64) -> String {
     let mut hasher = Sha256::new();
     hasher.update(b"atibon-egress-privacy-v1");
     hasher.update(destination.as_bytes());
     hasher.update(request_epoch.to_be_bytes());
-    hex::encode(hasher.finalize())
+    hex(&hasher.finalize())
 }
 
 fn relay_for(destination: &str, request_epoch: u64, pool: &[String]) -> Option<String> {
@@ -75,7 +79,11 @@ pub fn decide(
     let suspicious = reputation_score >= policy.suspicious_threshold;
 
     let (mode, relay, reason) = if !policy.enabled {
-        (EgressMode::Direct, None, "egress privacy disabled by policy".to_string())
+        (
+            EgressMode::Direct,
+            None,
+            "egress privacy disabled by policy".to_string(),
+        )
     } else if suspicious {
         match relay_for(destination, request_epoch, &policy.relay_pool) {
             Some(relay) => (
@@ -90,7 +98,11 @@ pub fn decide(
             ),
         }
     } else {
-        (EgressMode::Direct, None, "destination allowed by reputation policy".to_string())
+        (
+            EgressMode::Direct,
+            None,
+            "destination allowed by reputation policy".to_string(),
+        )
     };
 
     EgressDecision {
