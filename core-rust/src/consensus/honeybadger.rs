@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use sha2::{Digest, Sha256};
 
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct HoneyBadgerState {
     epoch: u64,
