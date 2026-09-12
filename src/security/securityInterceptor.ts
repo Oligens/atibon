@@ -106,7 +106,7 @@ export function installSecurityInterceptor(): () => void {
     this: XMLHttpRequest,
     body?: Document | XMLHttpRequestBodyInit | null,
   ): void {
-    if ((this as AtibonBlockedXHR).__atibonBlocked) {
+    if (Boolean((this as AtibonBlockedXHR).__atibonBlocked)) {
       this.abort();
       return;
     }
@@ -131,20 +131,22 @@ export function installSecurityInterceptor(): () => void {
 
   history.pushState = function (
     this: History,
-    ...args: Parameters<History["pushState"]>
-  ): ReturnType<History["pushState"]> {
-    const [state, title, url] = args;
-    if (url && inspectNavigation(String(url), "GET", "history")) return undefined;
-    return originalPushState.call(this, state, title, url);
+    state: unknown,
+    title: string,
+    url?: string | URL | null,
+  ): void {
+    if (url != null && inspectNavigation(String(url), "GET", "history")) return;
+    originalPushState.call(this, state, title, url ?? null);
   };
 
   history.replaceState = function (
     this: History,
-    ...args: Parameters<History["replaceState"]>
-  ): ReturnType<History["replaceState"]> {
-    const [state, title, url] = args;
-    if (url && inspectNavigation(String(url), "GET", "history")) return undefined;
-    return originalReplaceState.call(this, state, title, url);
+    state: unknown,
+    title: string,
+    url?: string | URL | null,
+  ): void {
+    if (url != null && inspectNavigation(String(url), "GET", "history")) return;
+    originalReplaceState.call(this, state, title, url ?? null);
   };
 
   document.addEventListener("click", onClick, true);
