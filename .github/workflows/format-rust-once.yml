@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   format-once:
-    if: github.sha == '391fce8c39e99ac6c0db8fc827313cd10d868f50'
+    if: github.sha == 'b55fcff1d1f13a271b8d1664d2e17425d161ad5e'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
