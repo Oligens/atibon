@@ -44,7 +44,9 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
 
 fn vectorize(payload: &[u8]) -> [f64; STATE_DIM] {
     let mut v = [0.0; STATE_DIM];
-    if payload.is_empty() { return v; }
+    if payload.is_empty() {
+        return v;
+    }
     for (i, byte) in payload.iter().enumerate() {
         let slot = i % STATE_DIM;
         v[slot] = (v[slot] * 31.0 + *byte as f64) % 1_000_003.0;
@@ -72,9 +74,13 @@ fn determinant(mut a: [[f64; STATE_DIM]; STATE_DIM]) -> f64 {
     for i in 0..STATE_DIM {
         let mut pivot = i;
         for r in (i + 1)..STATE_DIM {
-            if a[r][i].abs() > a[pivot][i].abs() { pivot = r; }
+            if a[r][i].abs() > a[pivot][i].abs() {
+                pivot = r;
+            }
         }
-        if a[pivot][i].abs() < f64::EPSILON { return 0.0; }
+        if a[pivot][i].abs() < f64::EPSILON {
+            return 0.0;
+        }
         if pivot != i {
             a.swap(pivot, i);
             det = -det;
@@ -83,7 +89,9 @@ fn determinant(mut a: [[f64; STATE_DIM]; STATE_DIM]) -> f64 {
         det *= p;
         for r in (i + 1)..STATE_DIM {
             let factor = a[r][i] / p;
-            for c in i..STATE_DIM { a[r][c] -= factor * a[i][c]; }
+            for c in i..STATE_DIM {
+                a[r][c] -= factor * a[i][c];
+            }
         }
     }
     det
@@ -92,27 +100,46 @@ fn determinant(mut a: [[f64; STATE_DIM]; STATE_DIM]) -> f64 {
 fn multiply(m: &[[f64; STATE_DIM]; STATE_DIM], v: &[f64; STATE_DIM]) -> [f64; STATE_DIM] {
     let mut out = [0.0; STATE_DIM];
     for i in 0..STATE_DIM {
-        for j in 0..STATE_DIM { out[i] += m[i][j] * v[j]; }
+        for j in 0..STATE_DIM {
+            out[i] += m[i][j] * v[j];
+        }
     }
     out
 }
 
 fn invert(mut a: [[f64; STATE_DIM]; STATE_DIM]) -> Option<[[f64; STATE_DIM]; STATE_DIM]> {
     let mut inv = [[0.0; STATE_DIM]; STATE_DIM];
-    for i in 0..STATE_DIM { inv[i][i] = 1.0; }
+    for i in 0..STATE_DIM {
+        inv[i][i] = 1.0;
+    }
     for i in 0..STATE_DIM {
         let mut pivot = i;
         for r in (i + 1)..STATE_DIM {
-            if a[r][i].abs() > a[pivot][i].abs() { pivot = r; }
+            if a[r][i].abs() > a[pivot][i].abs() {
+                pivot = r;
+            }
         }
-        if a[pivot][i].abs() < f64::EPSILON { return None; }
-        if pivot != i { a.swap(pivot, i); inv.swap(pivot, i); }
+        if a[pivot][i].abs() < f64::EPSILON {
+            return None;
+        }
+        if pivot != i {
+            a.swap(pivot, i);
+            inv.swap(pivot, i);
+        }
         let p = a[i][i];
-        for c in 0..STATE_DIM { a[i][c] /= p; inv[i][c] /= p; }
+        for c in 0..STATE_DIM {
+            a[i][c] /= p;
+            inv[i][c] /= p;
+        }
         for r in 0..STATE_DIM {
-            if r == i { continue; }
+            if r == i {
+                continue;
+            }
             let factor = a[r][i];
-            for c in 0..STATE_DIM { a[r][c] -= factor * a[i][c]; inv[r][c] -= factor * inv[i][c]; }
+            for c in 0..STATE_DIM {
+                a[r][c] -= factor * a[i][c];
+                inv[r][c] -= factor * inv[i][c];
+            }
         }
     }
     Some(inv)
@@ -122,35 +149,65 @@ pub fn process(payload: &[u8]) -> Result<MatrixPipelineResult, String> {
     let m = matrix();
     let det = determinant(m);
     let determinant_ok = det.is_finite() && det.abs() > DET_EPSILON;
-    if !determinant_ok { return Err("ATIBON matrix is singular or numerically unstable".into()); }
+    if !determinant_ok {
+        return Err("ATIBON matrix is singular or numerically unstable".into());
+    }
     let inverse = invert(m).ok_or_else(|| "ATIBON matrix inversion failed".to_string())?;
     let original = vectorize(payload);
     let transformed = multiply(&m, &original);
     let restored = multiply(&inverse, &transformed);
-    let integrity_ok = restored.iter().zip(original.iter()).all(|(a, b)| (a - b).abs() <= 1e-6 * (1.0 + b.abs()));
+    let integrity_ok = restored
+        .iter()
+        .zip(original.iter())
+        .all(|(a, b)| (a - b).abs() <= 1e-6 * (1.0 + b.abs()));
     let digest = hex(&Sha256::digest(payload));
     let hash = fnv1a64(payload);
-    let ingress = GatewayState { gateway: 1, vector: original, payload_digest: digest.clone(), fnv1a64: hash };
-    let egress = GatewayState { gateway: 3, vector: restored, payload_digest: digest, fnv1a64: hash };
-    Ok(MatrixPipelineResult { ingress, transformed, egress, determinant: det, determinant_ok, integrity_ok })
+    let ingress = GatewayState {
+        gateway: 1,
+        vector: original,
+        payload_digest: digest.clone(),
+        fnv1a64: hash,
+    };
+    let egress = GatewayState {
+        gateway: 3,
+        vector: restored,
+        payload_digest: digest,
+        fnv1a64: hash,
+    };
+    Ok(MatrixPipelineResult {
+        ingress,
+        transformed,
+        egress,
+        determinant: det,
+        determinant_ok,
+        integrity_ok,
+    })
 }
 
 pub fn generate_barriers(generation: u64, scope: &str, now_ms: u64) -> Vec<DynamicBarrier> {
-    (0..5).map(|i| DynamicBarrier {
-        id: format!("barrier-g{generation}-{i}"),
-        generation,
-        scope: scope.into(),
-        action: if i == 4 { "quarantine-and-observe".into() } else { "adaptive-isolation".into() },
-        expires_at_ms: now_ms.saturating_add(300_000 + i as u64 * 60_000),
-        synthetic: true,
-    }).collect()
+    (0..5)
+        .map(|i| DynamicBarrier {
+            id: format!("barrier-g{generation}-{i}"),
+            generation,
+            scope: scope.into(),
+            action: if i == 4 {
+                "quarantine-and-observe".into()
+            } else {
+                "adaptive-isolation".into()
+            },
+            expires_at_ms: now_ms.saturating_add(300_000 + i as u64 * 60_000),
+            synthetic: true,
+        })
+        .collect()
 }
 
 pub fn recursion_after_breach(generation: u64, scope: &str, now_ms: u64) -> Vec<DynamicBarrier> {
     generate_barriers(generation.saturating_add(1), scope, now_ms)
 }
 
-fn hex(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() }
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
 
 #[cfg(test)]
 mod tests {

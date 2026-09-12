@@ -37,8 +37,20 @@ impl ForensicLedger {
         artifacts: Vec<ForensicArtifact>,
         signature_hex: Option<String>,
     ) -> ForensicRecord {
-        let previous = self.records.last().map(|r| r.record_hash.as_str()).unwrap_or("genesis");
-        let material = serde_json::to_vec(&(event_id, collected_at_ms, threat_decision_hash, telemetry_digest, previous, &artifacts)).unwrap_or_default();
+        let previous = self
+            .records
+            .last()
+            .map(|r| r.record_hash.as_str())
+            .unwrap_or("genesis");
+        let material = serde_json::to_vec(&(
+            event_id,
+            collected_at_ms,
+            threat_decision_hash,
+            telemetry_digest,
+            previous,
+            &artifacts,
+        ))
+        .unwrap_or_default();
         let record_hash = hex(&Sha256::digest(material));
         let record = ForensicRecord {
             event_id: event_id.to_string(),
@@ -57,7 +69,9 @@ impl ForensicLedger {
     pub fn verify(&self) -> bool {
         let mut previous = "genesis".to_string();
         for record in &self.records {
-            if record.previous_record_hash != previous { return false; }
+            if record.previous_record_hash != previous {
+                return false;
+            }
             let material = serde_json::to_vec(&(
                 &record.event_id,
                 record.collected_at_ms,
@@ -65,19 +79,30 @@ impl ForensicLedger {
                 &record.telemetry_digest,
                 &record.previous_record_hash,
                 &record.artifacts,
-            )).unwrap_or_default();
-            if hex(&Sha256::digest(material)) != record.record_hash { return false; }
+            ))
+            .unwrap_or_default();
+            if hex(&Sha256::digest(material)) != record.record_hash {
+                return false;
+            }
             previous = record.record_hash.clone();
         }
         true
     }
 
     pub fn last_hash(&self) -> &str {
-        self.records.last().map(|r| r.record_hash.as_str()).unwrap_or("genesis")
+        self.records
+            .last()
+            .map(|r| r.record_hash.as_str())
+            .unwrap_or("genesis")
     }
 }
 
-pub fn artifact_from_bytes(id: &str, kind: &str, bytes: &[u8], collected_at_ms: u64) -> ForensicArtifact {
+pub fn artifact_from_bytes(
+    id: &str,
+    kind: &str,
+    bytes: &[u8],
+    collected_at_ms: u64,
+) -> ForensicArtifact {
     ForensicArtifact {
         artifact_id: id.to_string(),
         kind: kind.to_string(),
@@ -86,7 +111,9 @@ pub fn artifact_from_bytes(id: &str, kind: &str, bytes: &[u8], collected_at_ms: 
     }
 }
 
-fn hex(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() }
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
 
 #[cfg(test)]
 mod tests {

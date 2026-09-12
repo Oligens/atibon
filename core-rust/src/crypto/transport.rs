@@ -118,31 +118,66 @@ pub fn validate_envelope(
     current_epoch: u64,
     current_version: u64,
 ) -> Result<BarrierAcceptance, String> {
-    if envelope.protocol != PROTOCOL { return Err("unsupported barrier protocol".into()); }
-    if envelope.kem_algorithm != KEM_ALGORITHM { return Err("unsupported KEM".into()); }
-    if envelope.aead_algorithm != AEAD_ALGORITHM { return Err("unsupported AEAD".into()); }
-    if envelope.signature_algorithm != SIGNATURE_ALGORITHM { return Err("unsupported signature algorithm".into()); }
-    if envelope.sender_node_id.trim().is_empty() { return Err("missing sender node id".into()); }
-    if envelope.recipient_node_id.trim().is_empty() { return Err("missing recipient node id".into()); }
-    if envelope.key_id.trim().is_empty() { return Err("missing recipient key id".into()); }
-    if envelope.policy_id.trim().is_empty() { return Err("missing policy id".into()); }
-    if envelope.epoch < current_epoch { return Err("stale policy epoch".into()); }
-    if envelope.version <= current_version { return Err("stale policy version".into()); }
-    if envelope.issued_at_ms > now_ms.saturating_add(CLOCK_SKEW_MS) { return Err("barrier issued too far in the future".into()); }
-    if envelope.expires_at_ms <= now_ms || envelope.expires_at_ms <= envelope.issued_at_ms { return Err("expired or invalid barrier lifetime".into()); }
+    if envelope.protocol != PROTOCOL {
+        return Err("unsupported barrier protocol".into());
+    }
+    if envelope.kem_algorithm != KEM_ALGORITHM {
+        return Err("unsupported KEM".into());
+    }
+    if envelope.aead_algorithm != AEAD_ALGORITHM {
+        return Err("unsupported AEAD".into());
+    }
+    if envelope.signature_algorithm != SIGNATURE_ALGORITHM {
+        return Err("unsupported signature algorithm".into());
+    }
+    if envelope.sender_node_id.trim().is_empty() {
+        return Err("missing sender node id".into());
+    }
+    if envelope.recipient_node_id.trim().is_empty() {
+        return Err("missing recipient node id".into());
+    }
+    if envelope.key_id.trim().is_empty() {
+        return Err("missing recipient key id".into());
+    }
+    if envelope.policy_id.trim().is_empty() {
+        return Err("missing policy id".into());
+    }
+    if envelope.epoch < current_epoch {
+        return Err("stale policy epoch".into());
+    }
+    if envelope.version <= current_version {
+        return Err("stale policy version".into());
+    }
+    if envelope.issued_at_ms > now_ms.saturating_add(CLOCK_SKEW_MS) {
+        return Err("barrier issued too far in the future".into());
+    }
+    if envelope.expires_at_ms <= now_ms || envelope.expires_at_ms <= envelope.issued_at_ms {
+        return Err("expired or invalid barrier lifetime".into());
+    }
     if !is_hex(&envelope.kem_ciphertext_hex)
         || !is_hex(&envelope.nonce_hex)
         || !is_hex(&envelope.ciphertext_hex)
         || !is_hex(&envelope.policy_digest)
         || !is_hex(&envelope.consensus_hash)
         || !is_hex(&envelope.signer_public_key_hex)
-        || !is_hex(&envelope.signature_hex) { return Err("malformed hexadecimal envelope field".into()); }
-    if envelope.policy_digest.len() != 64 || envelope.consensus_hash.len() != 64 { return Err("invalid digest length".into()); }
-    if envelope.nonce_hex.len() != 24 { return Err("ChaCha20-Poly1305 nonce must be 12 bytes".into()); }
-    if envelope.kem_ciphertext_hex.len() != 2176 { return Err("ML-KEM-768 ciphertext must be 1088 bytes".into()); }
+        || !is_hex(&envelope.signature_hex)
+    {
+        return Err("malformed hexadecimal envelope field".into());
+    }
+    if envelope.policy_digest.len() != 64 || envelope.consensus_hash.len() != 64 {
+        return Err("invalid digest length".into());
+    }
+    if envelope.nonce_hex.len() != 24 {
+        return Err("ChaCha20-Poly1305 nonce must be 12 bytes".into());
+    }
+    if envelope.kem_ciphertext_hex.len() != 2176 {
+        return Err("ML-KEM-768 ciphertext must be 1088 bytes".into());
+    }
     Ok(BarrierAcceptance {
         accepted: false,
-        reason: "structural validation passed; trusted ML-DSA signature and ML-KEM decryption required".into(),
+        reason:
+            "structural validation passed; trusted ML-DSA signature and ML-KEM decryption required"
+                .into(),
         policy_digest: envelope.policy_digest.clone(),
         consensus_hash: envelope.consensus_hash.clone(),
     })
@@ -158,15 +193,27 @@ pub fn seal_barrier(
     consensus_hash: &str,
     issued_at_ms: u64,
 ) -> Result<BarrierEnvelope, String> {
-    use chacha20poly1305::{aead::{Aead, Generate, KeyInit, Payload}, ChaCha20Poly1305, Nonce};
+    use chacha20poly1305::{
+        aead::{Aead, Generate, KeyInit, Payload},
+        ChaCha20Poly1305, Nonce,
+    };
     use hkdf::Hkdf;
-    use ml_dsa::{KeyExport, KeyInit as DsaKeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey};
-    use ml_kem::{kem::{Encapsulate, Kem, EncapsulationKey}, MlKem768, TryKeyInit};
+    use ml_dsa::{
+        KeyExport, KeyInit as DsaKeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey,
+    };
+    use ml_kem::{
+        kem::{Encapsulate, EncapsulationKey, Kem},
+        MlKem768, TryKeyInit,
+    };
 
     let digest = policy_digest(policy)?;
-    if !is_fixed_hex(consensus_hash, 32) { return Err("consensus hash must be 32-byte hex".into()); }
+    if !is_fixed_hex(consensus_hash, 32) {
+        return Err("consensus hash must be 32-byte hex".into());
+    }
     let public_key = decode_hex(recipient_kem_public_key_hex)?;
-    if public_key.len() != 1184 { return Err("ML-KEM-768 public key must be 1184 bytes".into()); }
+    if public_key.len() != 1184 {
+        return Err("ML-KEM-768 public key must be 1184 bytes".into());
+    }
     let ek = EncapsulationKey::<MlKem768>::new_from_slice(&public_key)
         .map_err(|_| "invalid ML-KEM-768 public key encoding".to_string())?;
     let (kem_ct, shared_secret) = ek.encapsulate();
@@ -177,29 +224,55 @@ pub fn seal_barrier(
     let salt = Sha256::digest(&salt_input);
     let hk = Hkdf::<Sha256>::new(Some(&salt), shared_secret.as_ref());
     let mut aead_key = [0u8; 32];
-    hk.expand(b"ATIBON-BARRIER/2|ML-KEM-768|CHACHA20-POLY1305", &mut aead_key)
-        .map_err(|_| "HKDF expansion failed".to_string())?;
+    hk.expand(
+        b"ATIBON-BARRIER/2|ML-KEM-768|CHACHA20-POLY1305",
+        &mut aead_key,
+    )
+    .map_err(|_| "HKDF expansion failed".to_string())?;
 
     let nonce = Nonce::generate();
     let mut envelope = BarrierEnvelope {
-        protocol: PROTOCOL.into(), sender_node_id: sender_node_id.into(), recipient_node_id: recipient_node_id.into(),
-        key_id: key_id.into(), policy_id: policy.policy_id.clone(), version: policy.version, epoch: policy.epoch,
-        issued_at_ms, expires_at_ms: policy.expires_at_ms, kem_algorithm: KEM_ALGORITHM.into(),
-        aead_algorithm: AEAD_ALGORITHM.into(), signature_algorithm: SIGNATURE_ALGORITHM.into(),
-        kem_ciphertext_hex: hex(kem_ct.as_ref()), nonce_hex: hex(nonce.as_ref()), ciphertext_hex: String::new(),
-        policy_digest: digest, consensus_hash: consensus_hash.into(), signer_public_key_hex: String::new(), signature_hex: String::new(),
+        protocol: PROTOCOL.into(),
+        sender_node_id: sender_node_id.into(),
+        recipient_node_id: recipient_node_id.into(),
+        key_id: key_id.into(),
+        policy_id: policy.policy_id.clone(),
+        version: policy.version,
+        epoch: policy.epoch,
+        issued_at_ms,
+        expires_at_ms: policy.expires_at_ms,
+        kem_algorithm: KEM_ALGORITHM.into(),
+        aead_algorithm: AEAD_ALGORITHM.into(),
+        signature_algorithm: SIGNATURE_ALGORITHM.into(),
+        kem_ciphertext_hex: hex(kem_ct.as_ref()),
+        nonce_hex: hex(nonce.as_ref()),
+        ciphertext_hex: String::new(),
+        policy_digest: digest,
+        consensus_hash: consensus_hash.into(),
+        signer_public_key_hex: String::new(),
+        signature_hex: String::new(),
     };
-    let cipher = ChaCha20Poly1305::new_from_slice(&aead_key).map_err(|_| "invalid AEAD key".to_string())?;
+    let cipher =
+        ChaCha20Poly1305::new_from_slice(&aead_key).map_err(|_| "invalid AEAD key".to_string())?;
     let aad = header_bytes(&envelope)?;
     let plaintext = canonical_policy_bytes(policy)?;
-    let ciphertext = cipher.encrypt(&nonce, Payload { msg: &plaintext, aad: &aad })
+    let ciphertext = cipher
+        .encrypt(
+            &nonce,
+            Payload {
+                msg: &plaintext,
+                aad: &aad,
+            },
+        )
         .map_err(|_| "authenticated encryption failed".to_string())?;
     envelope.ciphertext_hex = hex(&ciphertext);
 
     let seed_hex = std::env::var("ATIBON_MLDSA65_SEED_HEX")
         .map_err(|_| "ATIBON_MLDSA65_SEED_HEX is not configured".to_string())?;
     let seed = decode_hex(&seed_hex)?;
-    if seed.len() != 32 { return Err("ML-DSA-65 seed must be exactly 32 bytes".into()); }
+    if seed.len() != 32 {
+        return Err("ML-DSA-65 seed must be exactly 32 bytes".into());
+    }
     let signing_key = SigningKey::<MlDsa65>::new_from_slice(&seed)
         .map_err(|e| format!("invalid ML-DSA seed: {e}"))?;
     let signature = signing_key.sign(&transcript(&envelope)?);
@@ -210,8 +283,13 @@ pub fn seal_barrier(
 
 #[cfg(not(feature = "pqc-native"))]
 pub fn seal_barrier(
-    _policy: &BarrierPolicy, _sender_node_id: &str, _recipient_node_id: &str,
-    _key_id: &str, _recipient_kem_public_key_hex: &str, _consensus_hash: &str, _issued_at_ms: u64,
+    _policy: &BarrierPolicy,
+    _sender_node_id: &str,
+    _recipient_node_id: &str,
+    _key_id: &str,
+    _recipient_kem_public_key_hex: &str,
+    _consensus_hash: &str,
+    _issued_at_ms: u64,
 ) -> Result<BarrierEnvelope, String> {
     Err("native PQC transport is disabled; build with --features pqc-native".into())
 }
@@ -225,24 +303,37 @@ pub fn open_barrier(
     current_epoch: u64,
     current_version: u64,
 ) -> Result<OpenedBarrier, String> {
-    use chacha20poly1305::{aead::{Aead, KeyInit, Payload}, ChaCha20Poly1305, Nonce};
+    use chacha20poly1305::{
+        aead::{Aead, KeyInit, Payload},
+        ChaCha20Poly1305, Nonce,
+    };
     use hkdf::Hkdf;
-    use ml_dsa::{KeyInit as DsaKeyInit, MlDsa65, Signature, SignatureEncoding, Verifier, VerifyingKey};
-    use ml_kem::{kem::{Decapsulate, Kem, DecapsulationKey}, MlKem768, TryKeyInit};
+    use ml_dsa::{
+        KeyInit as DsaKeyInit, MlDsa65, Signature, SignatureEncoding, Verifier, VerifyingKey,
+    };
+    use ml_kem::{
+        kem::{Decapsulate, DecapsulationKey, Kem},
+        MlKem768, TryKeyInit,
+    };
 
     validate_envelope(envelope, now_ms, current_epoch, current_version)?;
     let trusted = decode_hex(trusted_signer_public_key_hex)?;
-    if trusted.is_empty() || hex(&trusted) != envelope.signer_public_key_hex { return Err("untrusted ML-DSA signer key".into()); }
+    if trusted.is_empty() || hex(&trusted) != envelope.signer_public_key_hex {
+        return Err("untrusted ML-DSA signer key".into());
+    }
     let verifying_key = VerifyingKey::<MlDsa65>::new_from_slice(&trusted)
         .map_err(|e| format!("invalid trusted ML-DSA key: {e}"))?;
     let signature_bytes = decode_hex(&envelope.signature_hex)?;
     let signature = <Signature<MlDsa65> as TryFrom<&[u8]>>::try_from(signature_bytes.as_slice())
         .map_err(|e| format!("invalid ML-DSA signature: {e}"))?;
-    verifying_key.verify(&transcript(envelope)?, &signature)
+    verifying_key
+        .verify(&transcript(envelope)?, &signature)
         .map_err(|_| "ML-DSA signature verification failed".to_string())?;
 
     let private_key = decode_hex(recipient_kem_private_key_hex)?;
-    if private_key.len() != 2400 { return Err("ML-KEM-768 decapsulation key must be 2400 bytes".into()); }
+    if private_key.len() != 2400 {
+        return Err("ML-KEM-768 decapsulation key must be 2400 bytes".into());
+    }
     let dk = DecapsulationKey::<MlKem768>::new_from_slice(&private_key)
         .map_err(|_| "invalid ML-KEM-768 decapsulation key encoding".to_string())?;
     let kem_ct_bytes = decode_hex(&envelope.kem_ciphertext_hex)?;
@@ -250,28 +341,46 @@ pub fn open_barrier(
         .map_err(|_| "invalid ML-KEM-768 ciphertext".to_string())?;
     let shared_secret = dk.decapsulate(&kem_ct);
 
-    let mut salt_input = Vec::with_capacity(envelope.policy_digest.len() + envelope.consensus_hash.len());
+    let mut salt_input =
+        Vec::with_capacity(envelope.policy_digest.len() + envelope.consensus_hash.len());
     salt_input.extend_from_slice(envelope.policy_digest.as_bytes());
     salt_input.extend_from_slice(envelope.consensus_hash.as_bytes());
     let salt = Sha256::digest(&salt_input);
     let hk = Hkdf::<Sha256>::new(Some(&salt), shared_secret.as_ref());
     let mut aead_key = [0u8; 32];
-    hk.expand(b"ATIBON-BARRIER/2|ML-KEM-768|CHACHA20-POLY1305", &mut aead_key)
-        .map_err(|_| "HKDF expansion failed".to_string())?;
+    hk.expand(
+        b"ATIBON-BARRIER/2|ML-KEM-768|CHACHA20-POLY1305",
+        &mut aead_key,
+    )
+    .map_err(|_| "HKDF expansion failed".to_string())?;
 
     let nonce_bytes = decode_hex(&envelope.nonce_hex)?;
-    let nonce = Nonce::try_from(nonce_bytes.as_slice()).map_err(|_| "invalid ChaCha20-Poly1305 nonce".to_string())?;
+    let nonce = Nonce::try_from(nonce_bytes.as_slice())
+        .map_err(|_| "invalid ChaCha20-Poly1305 nonce".to_string())?;
     let ciphertext = decode_hex(&envelope.ciphertext_hex)?;
-    let cipher = ChaCha20Poly1305::new_from_slice(&aead_key).map_err(|_| "invalid AEAD key".to_string())?;
+    let cipher =
+        ChaCha20Poly1305::new_from_slice(&aead_key).map_err(|_| "invalid AEAD key".to_string())?;
     let aad = header_bytes(envelope)?;
-    let plaintext = cipher.decrypt(&nonce, Payload { msg: &ciphertext, aad: &aad })
+    let plaintext = cipher
+        .decrypt(
+            &nonce,
+            Payload {
+                msg: &ciphertext,
+                aad: &aad,
+            },
+        )
         .map_err(|_| "authenticated decryption failed".to_string())?;
     let policy: BarrierPolicy = serde_json::from_slice(&plaintext)
         .map_err(|e| format!("decrypted policy is invalid: {e}"))?;
     let digest = policy_digest(&policy)?;
-    if digest != envelope.policy_digest { return Err("decrypted policy digest mismatch".into()); }
-    if policy.policy_id != envelope.policy_id || policy.version != envelope.version
-        || policy.epoch != envelope.epoch || policy.expires_at_ms != envelope.expires_at_ms {
+    if digest != envelope.policy_digest {
+        return Err("decrypted policy digest mismatch".into());
+    }
+    if policy.policy_id != envelope.policy_id
+        || policy.version != envelope.version
+        || policy.epoch != envelope.epoch
+        || policy.expires_at_ms != envelope.expires_at_ms
+    {
         return Err("decrypted policy metadata mismatch".into());
     }
     Ok(OpenedBarrier {
@@ -285,18 +394,33 @@ pub fn open_barrier(
 
 #[cfg(not(feature = "pqc-native"))]
 pub fn open_barrier(
-    _envelope: &BarrierEnvelope, _recipient_kem_private_key_hex: &str,
-    _trusted_signer_public_key_hex: &str, _now_ms: u64, _current_epoch: u64, _current_version: u64,
+    _envelope: &BarrierEnvelope,
+    _recipient_kem_private_key_hex: &str,
+    _trusted_signer_public_key_hex: &str,
+    _now_ms: u64,
+    _current_epoch: u64,
+    _current_version: u64,
 ) -> Result<OpenedBarrier, String> {
     Err("native PQC transport is disabled; build with --features pqc-native".into())
 }
 
-fn is_fixed_hex(value: &str, bytes: usize) -> bool { is_hex(value) && value.len() == bytes * 2 }
-fn is_hex(value: &str) -> bool { !value.is_empty() && value.len() % 2 == 0 && value.bytes().all(|b| b.is_ascii_hexdigit()) }
-fn hex(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() }
+fn is_fixed_hex(value: &str, bytes: usize) -> bool {
+    is_hex(value) && value.len() == bytes * 2
+}
+fn is_hex(value: &str) -> bool {
+    !value.is_empty() && value.len() % 2 == 0 && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
 fn decode_hex(input: &str) -> Result<Vec<u8>, String> {
-    if input.len() % 2 != 0 { return Err("hex input must have even length".into()); }
-    (0..input.len()).step_by(2).map(|i| u8::from_str_radix(&input[i..i + 2], 16).map_err(|_| "invalid hex".to_string())).collect()
+    if input.len() % 2 != 0 {
+        return Err("hex input must have even length".into());
+    }
+    (0..input.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&input[i..i + 2], 16).map_err(|_| "invalid hex".to_string()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -305,28 +429,48 @@ mod tests {
 
     fn policy() -> BarrierPolicy {
         BarrierPolicy {
-            policy_id: "ced-test".into(), version: 2, epoch: 4, expires_at_ms: 9_999,
-            action: "quarantine".into(), scope: "ipv4:203.0.113.10".into(), rule_digest: "aa".repeat(32),
+            policy_id: "ced-test".into(),
+            version: 2,
+            epoch: 4,
+            expires_at_ms: 9_999,
+            action: "quarantine".into(),
+            scope: "ipv4:203.0.113.10".into(),
+            rule_digest: "aa".repeat(32),
         }
     }
 
     #[test]
     fn digest_is_stable() {
         assert_eq!(policy_digest(&policy()).unwrap().len(), 64);
-        assert_eq!(policy_digest(&policy()).unwrap(), policy_digest(&policy()).unwrap());
+        assert_eq!(
+            policy_digest(&policy()).unwrap(),
+            policy_digest(&policy()).unwrap()
+        );
     }
 
     #[test]
     fn rejects_stale_policy() {
         let p = policy();
         let envelope = BarrierEnvelope {
-            protocol: PROTOCOL.into(), sender_node_id: "node-a".into(), recipient_node_id: "node-b".into(),
-            key_id: "kem-b-v1".into(), policy_id: p.policy_id.clone(), version: p.version, epoch: p.epoch,
-            issued_at_ms: 1, expires_at_ms: p.expires_at_ms, kem_algorithm: KEM_ALGORITHM.into(),
-            aead_algorithm: AEAD_ALGORITHM.into(), signature_algorithm: SIGNATURE_ALGORITHM.into(),
-            kem_ciphertext_hex: "aa".repeat(1088), nonce_hex: "bb".repeat(12), ciphertext_hex: "cc".repeat(32),
-            policy_digest: policy_digest(&p).unwrap(), consensus_hash: "dd".repeat(32),
-            signer_public_key_hex: "ee".repeat(32), signature_hex: "ff".repeat(32),
+            protocol: PROTOCOL.into(),
+            sender_node_id: "node-a".into(),
+            recipient_node_id: "node-b".into(),
+            key_id: "kem-b-v1".into(),
+            policy_id: p.policy_id.clone(),
+            version: p.version,
+            epoch: p.epoch,
+            issued_at_ms: 1,
+            expires_at_ms: p.expires_at_ms,
+            kem_algorithm: KEM_ALGORITHM.into(),
+            aead_algorithm: AEAD_ALGORITHM.into(),
+            signature_algorithm: SIGNATURE_ALGORITHM.into(),
+            kem_ciphertext_hex: "aa".repeat(1088),
+            nonce_hex: "bb".repeat(12),
+            ciphertext_hex: "cc".repeat(32),
+            policy_digest: policy_digest(&p).unwrap(),
+            consensus_hash: "dd".repeat(32),
+            signer_public_key_hex: "ee".repeat(32),
+            signature_hex: "ff".repeat(32),
         };
         assert!(validate_envelope(&envelope, 1_000, 4, 2).is_err());
     }

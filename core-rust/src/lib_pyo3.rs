@@ -6,9 +6,9 @@ pub mod agents;
 pub mod audit;
 pub mod ced;
 pub mod conntrack;
-pub mod dpi;
 pub mod consensus;
 pub mod crypto;
+pub mod dpi;
 pub mod forensic;
 pub mod learning;
 pub mod matrix_gateway;
@@ -18,7 +18,9 @@ pub mod shadow;
 use pyo3::prelude::*;
 
 #[pyfunction]
-fn version() -> &'static str { env!("CARGO_PKG_VERSION") }
+fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
 
 #[pyfunction]
 #[pyo3(signature = (packet, max_packet_size = 65_535))]
@@ -52,7 +54,11 @@ fn ced_observe(samples_json: &str) -> PyResult<String> {
 
 #[pyfunction]
 #[pyo3(signature = (samples_json, thresholds_json = "{}", previous_forensic_hash = "genesis"))]
-fn ced_decide(samples_json: &str, thresholds_json: &str, previous_forensic_hash: &str) -> PyResult<String> {
+fn ced_decide(
+    samples_json: &str,
+    thresholds_json: &str,
+    previous_forensic_hash: &str,
+) -> PyResult<String> {
     let samples: Vec<ced::TelemetrySample> = serde_json::from_str(samples_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let thresholds: ced::ThreatThresholdConfig = serde_json::from_str(thresholds_json)
@@ -63,17 +69,33 @@ fn ced_decide(samples_json: &str, thresholds_json: &str, previous_forensic_hash:
 }
 
 #[pyfunction]
-fn forensic_artifact_digest(id: &str, kind: &str, bytes: &[u8], collected_at_ms: u64) -> PyResult<String> {
-    serde_json::to_string(&forensic::artifact_from_bytes(id, kind, bytes, collected_at_ms))
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+fn forensic_artifact_digest(
+    id: &str,
+    kind: &str,
+    bytes: &[u8],
+    collected_at_ms: u64,
+) -> PyResult<String> {
+    serde_json::to_string(&forensic::artifact_from_bytes(
+        id,
+        kind,
+        bytes,
+        collected_at_ms,
+    ))
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
-fn validate_barrier(envelope_json: &str, now_ms: u64, current_epoch: u64, current_version: u64) -> PyResult<String> {
+fn validate_barrier(
+    envelope_json: &str,
+    now_ms: u64,
+    current_epoch: u64,
+    current_version: u64,
+) -> PyResult<String> {
     let envelope: crypto::transport::BarrierEnvelope = serde_json::from_str(envelope_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let result = crypto::transport::validate_envelope(&envelope, now_ms, current_epoch, current_version)
-        .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    let result =
+        crypto::transport::validate_envelope(&envelope, now_ms, current_epoch, current_version)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&result)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
@@ -91,9 +113,15 @@ fn seal_barrier(
     let policy: crypto::transport::BarrierPolicy = serde_json::from_str(policy_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let envelope = crypto::transport::seal_barrier(
-        &policy, sender_node_id, recipient_node_id, key_id,
-        recipient_kem_public_key_hex, consensus_hash, issued_at_ms,
-    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
+        &policy,
+        sender_node_id,
+        recipient_node_id,
+        key_id,
+        recipient_kem_public_key_hex,
+        consensus_hash,
+        issued_at_ms,
+    )
+    .map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&envelope)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
@@ -110,9 +138,14 @@ fn open_barrier(
     let envelope: crypto::transport::BarrierEnvelope = serde_json::from_str(envelope_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
     let result = crypto::transport::open_barrier(
-        &envelope, recipient_kem_private_key_hex, trusted_signer_public_key_hex,
-        now_ms, current_epoch, current_version,
-    ).map_err(pyo3::exceptions::PyValueError::new_err)?;
+        &envelope,
+        recipient_kem_private_key_hex,
+        trusted_signer_public_key_hex,
+        now_ms,
+        current_epoch,
+        current_version,
+    )
+    .map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&result)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
@@ -126,14 +159,18 @@ fn matrix_gateway_process(packet: &[u8]) -> PyResult<String> {
 
 #[pyfunction]
 fn generate_dynamic_barriers(generation: u64, scope: &str, now_ms: u64) -> PyResult<String> {
-    serde_json::to_string(&matrix_gateway::generate_barriers(generation, scope, now_ms))
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    serde_json::to_string(&matrix_gateway::generate_barriers(
+        generation, scope, now_ms,
+    ))
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
 fn recurse_dynamic_barriers(generation: u64, scope: &str, now_ms: u64) -> PyResult<String> {
-    serde_json::to_string(&matrix_gateway::recursion_after_breach(generation, scope, now_ms))
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+    serde_json::to_string(&matrix_gateway::recursion_after_breach(
+        generation, scope, now_ms,
+    ))
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -143,9 +180,17 @@ fn list_defensive_agents() -> PyResult<String> {
 }
 
 #[pyfunction]
-fn agent_consensus(anomaly_score: f64, crypto_violation: bool, repeated_behavior: bool) -> PyResult<String> {
-    serde_json::to_string(&agents::consensus(anomaly_score, crypto_violation, repeated_behavior))
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+fn agent_consensus(
+    anomaly_score: f64,
+    crypto_violation: bool,
+    repeated_behavior: bool,
+) -> PyResult<String> {
+    serde_json::to_string(&agents::consensus(
+        anomaly_score,
+        crypto_violation,
+        repeated_behavior,
+    ))
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pymodule]

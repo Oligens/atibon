@@ -35,10 +35,18 @@ impl HoneyBadgerState {
         true
     }
 
-    pub fn epoch(&self) -> u64 { self.epoch }
-    pub fn accepted(&self) -> u64 { self.accepted }
-    pub fn quorum(&self) -> u64 { self.quorum }
-    pub fn state_hash(&self) -> String { self.state_hash.clone() }
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
+    pub fn accepted(&self) -> u64 {
+        self.accepted
+    }
+    pub fn quorum(&self) -> u64 {
+        self.quorum
+    }
+    pub fn state_hash(&self) -> String {
+        self.state_hash.clone()
+    }
 }
 
 #[cfg(test)]

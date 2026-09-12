@@ -154,8 +154,6 @@ fn decode_hex(input: &str) -> Result<Vec<u8>, String> {
     }
     (0..input.len())
         .step_by(2)
-        .map(|i| {
-            u8::from_str_radix(&input[i..i + 2], 16).map_err(|_| "invalid hex".to_string())
-        })
+        .map(|i| u8::from_str_radix(&input[i..i + 2], 16).map_err(|_| "invalid hex".to_string()))
         .collect()
 }
