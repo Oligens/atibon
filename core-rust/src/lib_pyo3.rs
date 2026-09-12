@@ -9,6 +9,7 @@ pub mod conntrack;
 pub mod consensus;
 pub mod crypto;
 pub mod dpi;
+pub mod egress_privacy;
 pub mod forensic;
 pub mod learning;
 pub mod matrix_gateway;
@@ -174,6 +175,24 @@ fn recurse_dynamic_barriers(generation: u64, scope: &str, now_ms: u64) -> PyResu
 }
 
 #[pyfunction]
+fn egress_privacy_decide(
+    destination: &str,
+    reputation_score: u8,
+    request_count: u64,
+    policy_json: &str,
+) -> PyResult<String> {
+    let policy: egress_privacy::EgressPolicy = serde_json::from_str(policy_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    serde_json::to_string(&egress_privacy::decide(
+        destination,
+        reputation_score,
+        request_count,
+        &policy,
+    ))
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
 fn list_defensive_agents() -> PyResult<String> {
     serde_json::to_string(agents::descriptors())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
@@ -208,6 +227,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(matrix_gateway_process, m)?)?;
     m.add_function(wrap_pyfunction!(generate_dynamic_barriers, m)?)?;
     m.add_function(wrap_pyfunction!(recurse_dynamic_barriers, m)?)?;
+    m.add_function(wrap_pyfunction!(egress_privacy_decide, m)?)?;
     m.add_function(wrap_pyfunction!(list_defensive_agents, m)?)?;
     m.add_function(wrap_pyfunction!(agent_consensus, m)?)?;
     m.add_class::<dpi::DpiEngine>()?;
