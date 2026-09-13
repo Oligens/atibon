@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "suspicious_threshold": 70,
+  "rotate_after_requests": 100,
+  "relay_pool": [
+    "http://127.0.0.1:3128"
+  ]
+}
