@@ -96,13 +96,9 @@ fn validate_barrier(
 ) -> PyResult<String> {
     let envelope: crypto::transport::BarrierEnvelope = serde_json::from_str(envelope_json)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-    let result = crypto::transport::validate_envelope(
-        &envelope,
-        now_ms,
-        current_epoch,
-        current_version,
-    )
-    .map_err(pyo3::exceptions::PyValueError::new_err)?;
+    let result =
+        crypto::transport::validate_envelope(&envelope, now_ms, current_epoch, current_version)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&result)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
