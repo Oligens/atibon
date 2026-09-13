@@ -4,6 +4,8 @@ use std::net::Ipv4Addr;
 use std::process::{Command, ExitCode, Stdio};
 
 use _native::ced::{self, TelemetrySample};
+use _native::egress_pipeline::{self, EgressRequest, EgressRuntimeMode};
+use _native::egress_privacy::EgressPolicy;
 
 fn run_nft(args: &[&str]) -> Result<(), String> {
     let output = Command::new("nft")
@@ -15,6 +17,136 @@ fn run_nft(args: &[&str]) -> Result<(), String> {
         Ok(())
     } else {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+}
+
+fn arg_value(args: &[String], flag: &str) -> Option<String> {
+    args.iter()
+        .position(|arg| arg == flag)
+        .and_then(|pos| args.get(pos + 1))
+        .cloned()
+}
+
+fn egress_mode(args: &[String]) -> Result<EgressRuntimeMode, String> {
+    match arg_value(args, "--egress-mode").as_deref() {
+        None | Some("shadow") | Some("observe-only") => Ok(EgressRuntimeMode::Shadow),
+        Some("enforce") => Ok(EgressRuntimeMode::Enforce),
+        Some(value) => Err(format!("invalid --egress-mode: {value}")),
+    }
+}
+
+fn egress_mode_run(args: &[String]) -> ExitCode {
+    let destination = match arg_value(args, "--egress-destination") {
+        Some(value) => value,
+        None => {
+            eprintln!("ATIBON: --egress-destination requires a hostname or destination identifier");
+            return ExitCode::from(2);
+        }
+    };
+    let reputation_score = match arg_value(args, "--egress-reputation")
+        .as_deref()
+        .unwrap_or("0")
+        .parse::<u8>()
+    {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("ATIBON: --egress-reputation must be an integer from 0 to 255");
+            return ExitCode::from(2);
+        }
+    };
+    let request_count = match arg_value(args, "--egress-request-count")
+        .as_deref()
+        .unwrap_or("0")
+        .parse::<u64>()
+    {
+        Ok(value) => value,
+        Err(_) => {
+            eprintln!("ATIBON: --egress-request-count must be an unsigned integer");
+            return ExitCode::from(2);
+        }
+    };
+    let policy_path = arg_value(args, "--egress-policy")
+        .unwrap_or_else(|| "/etc/atibon/egress-policy.json".into());
+    let audit_path = arg_value(args, "--egress-audit")
+        .unwrap_or_else(|| "/var/log/atibon/egress.jsonl".into());
+    let runtime_mode = match egress_mode(args) {
+        Ok(mode) => mode,
+        Err(error) => {
+            eprintln!("ATIBON: {error}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let policy_raw = match fs::read_to_string(&policy_path) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("ATIBON: egress policy read failed: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let policy: EgressPolicy = match serde_json::from_str(&policy_raw) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("ATIBON: invalid egress policy JSON: {error}");
+            return ExitCode::from(2);
+        }
+    };
+
+    let request = EgressRequest {
+        destination: &destination,
+        reputation_score,
+        request_count,
+    };
+    let audit = match _native::audit::AuditLog::open(&audit_path) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("ATIBON: egress audit open failed: {error}");
+            return ExitCode::from(1);
+        }
+    };
+    let execution = match egress_pipeline::evaluate_and_audit(
+        &request,
+        &policy,
+        runtime_mode,
+        &audit,
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("ATIBON: egress audit failed: {error}");
+            return ExitCode::from(1);
+        }
+    };
+
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&execution).unwrap_or_else(|_| "{}".into())
+    );
+
+    if runtime_mode == EgressRuntimeMode::Shadow {
+        println!("ATIBON EGRESS: observe-only; no network policy was changed.");
+        return ExitCode::SUCCESS;
+    }
+
+    match execution.action.as_str() {
+        "allow:direct" => {
+            println!("ATIBON EGRESS: direct egress allowed by policy.");
+            ExitCode::SUCCESS
+        }
+        "route:approved-relay" => {
+            println!(
+                "ATIBON EGRESS: approved relay selected: {}",
+                execution.decision.relay.as_deref().unwrap_or("<missing>")
+            );
+            println!(
+                "ATIBON EGRESS: hand off to the configured NAT/proxy gateway; ATIBON does not spoof source IPs or headers."
+            );
+            ExitCode::SUCCESS
+        }
+        "deny:quarantine" => {
+            eprintln!("ATIBON EGRESS: quarantined; no approved relay is available.");
+            ExitCode::from(10)
+        }
+        _ => ExitCode::from(1),
     }
 }
 
@@ -94,9 +226,12 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     if args.iter().any(|a| a == "--health") {
         println!(
-            r#"{{"service":"atibon-agent","status":"ok","enforcement":"nftables","ced":"enabled","pqc":"ML-KEM-768/ML-DSA-65 ready"}}"#
+            r#"{{"service":"atibon-agent","status":"ok","enforcement":"nftables","ced":"enabled","egress":"shadow-first","pqc":"ML-KEM-768/ML-DSA-65 ready"}}"#
         );
         return ExitCode::SUCCESS;
+    }
+    if args.iter().any(|a| a == "--egress") {
+        return egress_mode_run(&args);
     }
     if args.iter().any(|a| a == "--ced-telemetry") {
         return ced_mode(&args);
@@ -139,7 +274,7 @@ fn main() -> ExitCode {
     let validate = args.iter().any(|a| a == "--validate");
     let apply = args.iter().any(|a| a == "--apply");
     if !validate && !apply {
-        eprintln!("usage: atibon-agent --health | --validate [--rules PATH] | --apply [--rules PATH] | --block-ip IPV4 | --ced-telemetry PATH [--ced-block-ip IPV4] [--ced-dry-run]");
+        eprintln!("usage: atibon-agent --health | --validate [--rules PATH] | --apply [--rules PATH] | --egress --egress-destination HOST --egress-reputation SCORE [--egress-request-count N] [--egress-policy PATH] [--egress-audit PATH] [--egress-mode shadow|enforce] | --block-ip IPV4 | --ced-telemetry PATH [--ced-block-ip IPV4] [--ced-dry-run]");
         return ExitCode::from(2);
     }
     if fs::metadata(&rules).is_err() {
