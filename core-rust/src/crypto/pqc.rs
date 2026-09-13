@@ -118,6 +118,7 @@ impl PqcFacade {
         {
             use ml_kem::{
                 kem::{Decapsulate, Encapsulate},
+                Kem,
                 MlKem768,
             };
 
