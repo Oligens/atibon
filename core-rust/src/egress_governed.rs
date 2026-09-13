@@ -66,12 +66,13 @@ impl JsonlAudit {
             }
         }
         let file = OpenOptions::new().create(true).append(true).open(path)?;
-        Ok(Self { writer: BufWriter::new(file) })
+        Ok(Self {
+            writer: BufWriter::new(file),
+        })
     }
 
     fn write(&mut self, trace: &EgressTrace) -> std::io::Result<()> {
-        serde_json::to_writer(&mut self.writer, trace)
-            .map_err(std::io::Error::other)?;
+        serde_json::to_writer(&mut self.writer, trace).map_err(std::io::Error::other)?;
         self.writer.write_all(b"\n")?;
         self.writer.flush()
     }
@@ -85,10 +86,14 @@ fn now_secs() -> u64 {
 }
 
 fn simulated_decision(input: &EgressInput, relay_available: bool) -> RouteDecision {
-    if input.policy_score >= 80 {
-        if relay_available { RouteDecision::PrivacyRoute } else { RouteDecision::Quarantine }
-    } else if input.reputation_score >= 70 {
-        if relay_available { RouteDecision::PrivacyRoute } else { RouteDecision::Quarantine }
+    let risk_triggered = input.policy_score >= 80 || input.reputation_score >= 70;
+
+    if risk_triggered {
+        if relay_available {
+            RouteDecision::PrivacyRoute
+        } else {
+            RouteDecision::Quarantine
+        }
     } else {
         RouteDecision::Allow
     }
@@ -112,7 +117,9 @@ pub fn evaluate(
         && (matches!(effective, RouteDecision::PrivacyRoute) || approved_relay.is_some());
     let relay = if matches!(effective, RouteDecision::PrivacyRoute) {
         approved_relay.clone()
-    } else { None };
+    } else {
+        None
+    };
 
     let trace = EgressTrace {
         timestamp: now_secs(),
@@ -128,8 +135,12 @@ pub fn evaluate(
         shadow_mismatch: mode == RuntimeMode::Shadow && simulated != effective,
         reason: match simulated {
             RouteDecision::Allow => "reputation/policy allow".into(),
-            RouteDecision::PrivacyRoute => "privacy route requires approved relay then NAT/proxy".into(),
-            RouteDecision::Quarantine => "risk/policy decision requires controlled quarantine".into(),
+            RouteDecision::PrivacyRoute => {
+                "privacy route requires approved relay then NAT/proxy".into()
+            }
+            RouteDecision::Quarantine => {
+                "risk/policy decision requires controlled quarantine".into()
+            }
         },
     };
     audit.write(&trace)?;
@@ -151,14 +162,22 @@ mod tests {
     use super::*;
 
     fn audit() -> JsonlAudit {
-        JsonlAudit::open(std::env::temp_dir().join(format!("atibon-egress-{}.jsonl", now_secs())))
-            .expect("audit")
+        JsonlAudit::open(
+            std::env::temp_dir().join(format!("atibon-egress-{}.jsonl", now_secs())),
+        )
+        .expect("audit")
     }
 
     #[test]
     fn shadow_is_non_blocking_but_records_simulated_quarantine() {
-        let input = EgressInput { destination: "bad.example".into(), reputation_score: 90, policy_score: 90, request_count: 1 };
-        let result = evaluate(&input, RuntimeMode::Shadow, None, &mut audit()).expect("evaluation");
+        let input = EgressInput {
+            destination: "bad.example".into(),
+            reputation_score: 90,
+            policy_score: 90,
+            request_count: 1,
+        };
+        let result =
+            evaluate(&input, RuntimeMode::Shadow, None, &mut audit()).expect("evaluation");
         assert_eq!(result.simulated_decision, RouteDecision::Quarantine);
         assert_eq!(result.effective_decision, RouteDecision::Allow);
         assert!(!result.packet_blocked);
@@ -167,8 +186,19 @@ mod tests {
 
     #[test]
     fn enforce_privacy_route_uses_relay_and_nat_proxy() {
-        let input = EgressInput { destination: "suspicious.example".into(), reputation_score: 90, policy_score: 60, request_count: 1 };
-        let result = evaluate(&input, RuntimeMode::Enforce, Some("relay://approved".into()), &mut audit()).expect("evaluation");
+        let input = EgressInput {
+            destination: "suspicious.example".into(),
+            reputation_score: 90,
+            policy_score: 60,
+            request_count: 1,
+        };
+        let result = evaluate(
+            &input,
+            RuntimeMode::Enforce,
+            Some("relay://approved".into()),
+            &mut audit(),
+        )
+        .expect("evaluation");
         assert_eq!(result.simulated_decision, RouteDecision::PrivacyRoute);
         assert_eq!(result.effective_decision, RouteDecision::PrivacyRoute);
         assert!(result.relay.is_some());
@@ -178,8 +208,14 @@ mod tests {
 
     #[test]
     fn enforce_quarantines_without_relay() {
-        let input = EgressInput { destination: "suspicious.example".into(), reputation_score: 90, policy_score: 60, request_count: 1 };
-        let result = evaluate(&input, RuntimeMode::Enforce, None, &mut audit()).expect("evaluation");
+        let input = EgressInput {
+            destination: "suspicious.example".into(),
+            reputation_score: 90,
+            policy_score: 60,
+            request_count: 1,
+        };
+        let result =
+            evaluate(&input, RuntimeMode::Enforce, None, &mut audit()).expect("evaluation");
         assert_eq!(result.effective_decision, RouteDecision::Quarantine);
         assert!(result.packet_blocked);
     }
