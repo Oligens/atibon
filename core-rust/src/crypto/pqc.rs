@@ -119,7 +119,7 @@ impl PqcFacade {
             use ml_kem::{kem::Kem, MlKem768};
             use ml_kem::kem::{Decapsulate, Encapsulate};
 
-            let (dk, ek) = Kem::generate_keypair();
+            let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
             let (ct, send) = ek.encapsulate();
             let recv = dk.decapsulate(&ct);
             if send != recv {
