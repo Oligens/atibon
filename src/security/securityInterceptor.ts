@@ -99,9 +99,9 @@ export function installSecurityInterceptor(): () => void {
     }
 
     if (username !== undefined || password !== undefined) {
-      originalOpen.call(this, method, url, async, username ?? null, password ?? null);
+      originalOpen.call(this, method, url, Boolean(async), username ?? null, password ?? null);
     } else {
-      originalOpen.call(this, method, url, async);
+      originalOpen.call(this, method, url, Boolean(async));
     }
   };
 
