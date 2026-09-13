@@ -116,8 +116,8 @@ impl PqcFacade {
     pub fn kem_health(&self) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_kem::kem::{Decapsulate, Encapsulate};
-            use ml_kem::{kem::Kem, MlKem768};
+            use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
+            use ml_kem::MlKem768;
 
             let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
             let (ct, send) = ek.encapsulate();
@@ -155,3 +155,4 @@ fn decode_hex(input: &str) -> Result<Vec<u8>, String> {
         .map(|i| u8::from_str_radix(&input[i..i + 2], 16).map_err(|_| "invalid hex".to_string()))
         .collect()
 }
+
