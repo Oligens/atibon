@@ -9,6 +9,7 @@ pub mod conntrack;
 pub mod consensus;
 pub mod crypto;
 pub mod dpi;
+pub mod egress_pipeline;
 pub mod egress_privacy;
 pub mod forensic;
 pub mod learning;
@@ -193,6 +194,40 @@ fn egress_privacy_decide(
 }
 
 #[pyfunction]
+#[pyo3(signature = (destination, reputation_score, request_count, policy_json, runtime_mode = "shadow", audit_path = "/var/log/atibon/egress.jsonl"))]
+fn egress_pipeline_decide(
+    destination: &str,
+    reputation_score: u8,
+    request_count: u64,
+    policy_json: &str,
+    runtime_mode: &str,
+    audit_path: &str,
+) -> PyResult<String> {
+    let policy: egress_privacy::EgressPolicy = serde_json::from_str(policy_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let mode = match runtime_mode {
+        "shadow" | "observe-only" => egress_pipeline::EgressRuntimeMode::Shadow,
+        "enforce" => egress_pipeline::EgressRuntimeMode::Enforce,
+        other => {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "invalid egress runtime mode: {other}"
+            )))
+        }
+    };
+    let request = egress_pipeline::EgressRequest {
+        destination,
+        reputation_score,
+        request_count,
+    };
+    let audit = audit::AuditLog::open(audit_path)
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+    let execution = egress_pipeline::evaluate_and_audit(&request, &policy, mode, &audit)
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+    serde_json::to_string(&execution)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
+#[pyfunction]
 fn list_defensive_agents() -> PyResult<String> {
     serde_json::to_string(agents::descriptors())
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
@@ -228,6 +263,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(generate_dynamic_barriers, m)?)?;
     m.add_function(wrap_pyfunction!(recurse_dynamic_barriers, m)?)?;
     m.add_function(wrap_pyfunction!(egress_privacy_decide, m)?)?;
+    m.add_function(wrap_pyfunction!(egress_pipeline_decide, m)?)?;
     m.add_function(wrap_pyfunction!(list_defensive_agents, m)?)?;
     m.add_function(wrap_pyfunction!(agent_consensus, m)?)?;
     m.add_class::<dpi::DpiEngine>()?;
