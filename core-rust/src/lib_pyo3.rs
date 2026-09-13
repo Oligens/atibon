@@ -12,6 +12,7 @@ pub mod dpi;
 pub mod egress_pipeline;
 pub mod egress_privacy;
 pub mod forensic;
+pub mod governance;
 pub mod learning;
 pub mod matrix_gateway;
 pub mod rules;
@@ -149,7 +150,7 @@ fn open_barrier(
     )
     .map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&result)
-        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+        .map_err(pyo3::exceptions::PyRuntimeError::new_err)
 }
 
 #[pyfunction]
@@ -247,6 +248,29 @@ fn agent_consensus(
     .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
+#[pyfunction]
+fn governed_agent_pipeline(
+    attack_score: f64,
+    stage_scores_json: &str,
+    candidate_json: &str,
+    now_ms: u64,
+) -> PyResult<String> {
+    let stage_scores: Vec<f64> = serde_json::from_str(stage_scores_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let candidate: governance::BarrierCandidate = serde_json::from_str(candidate_json)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let mut governor = governance::ResourceGovernor::default();
+    let result = governance::run_pipeline(
+        &mut governor,
+        attack_score,
+        &stage_scores,
+        Some(candidate),
+        now_ms,
+    );
+    serde_json::to_string(&result)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
+}
+
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
@@ -266,6 +290,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(egress_pipeline_decide, m)?)?;
     m.add_function(wrap_pyfunction!(list_defensive_agents, m)?)?;
     m.add_function(wrap_pyfunction!(agent_consensus, m)?)?;
+    m.add_function(wrap_pyfunction!(governed_agent_pipeline, m)?)?;
     m.add_class::<dpi::DpiEngine>()?;
     m.add_class::<consensus::HoneyBadgerState>()?;
     m.add_class::<crypto::PqcFacade>()?;
