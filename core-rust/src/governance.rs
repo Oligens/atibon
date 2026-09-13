@@ -273,8 +273,17 @@ pub fn validate_barrier(candidate: &BarrierCandidate) -> BarrierValidation {
     let approved = security_ok && cost_ok && compatibility_ok;
     let reason = if approved {
         "security/cost/compatibility validation passed".into()
+    } else if !security_ok {
+        "ABR candidate rejected: security validation failed".into()
+    } else if !cost_ok {
+        "ABR candidate rejected: cost/resource validation failed".into()
+    } else if candidate.generation > MAX_GENERATION_DEPTH {
+        format!(
+            "ABR candidate rejected: MAX_GENERATION_DEPTH exceeded ({} > {})",
+            candidate.generation, MAX_GENERATION_DEPTH
+        )
     } else {
-        "ABR candidate rejected before activation".into()
+        "ABR candidate rejected: compatibility validation failed".into()
     };
     BarrierValidation {
         security_ok,
