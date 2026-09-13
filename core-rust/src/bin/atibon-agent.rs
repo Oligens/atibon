@@ -67,8 +67,8 @@ fn egress_mode_run(args: &[String]) -> ExitCode {
     };
     let policy_path = arg_value(args, "--egress-policy")
         .unwrap_or_else(|| "/etc/atibon/egress-policy.json".into());
-    let audit_path = arg_value(args, "--egress-audit")
-        .unwrap_or_else(|| "/var/log/atibon/egress.jsonl".into());
+    let audit_path =
+        arg_value(args, "--egress-audit").unwrap_or_else(|| "/var/log/atibon/egress.jsonl".into());
     let runtime_mode = match egress_mode(args) {
         Ok(mode) => mode,
         Err(error) => {
@@ -104,18 +104,14 @@ fn egress_mode_run(args: &[String]) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    let execution = match egress_pipeline::evaluate_and_audit(
-        &request,
-        &policy,
-        runtime_mode,
-        &audit,
-    ) {
-        Ok(value) => value,
-        Err(error) => {
-            eprintln!("ATIBON: egress audit failed: {error}");
-            return ExitCode::from(1);
-        }
-    };
+    let execution =
+        match egress_pipeline::evaluate_and_audit(&request, &policy, runtime_mode, &audit) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("ATIBON: egress audit failed: {error}");
+                return ExitCode::from(1);
+            }
+        };
 
     println!(
         "{}",
