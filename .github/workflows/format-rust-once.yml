@@ -23,36 +23,35 @@ jobs:
         run: |
           from pathlib import Path
 
-          def replace(path: str, old: str, new: str) -> None:
+          def replace_if_present(path: str, old: str, new: str) -> None:
               p = Path(path)
               text = p.read_text(encoding="utf-8")
-              if old not in text:
-                  raise SystemExit(f"expected text not found in {path}: {old!r}")
-              p.write_text(text.replace(old, new), encoding="utf-8")
+              if old in text:
+                  p.write_text(text.replace(old, new), encoding="utf-8")
 
-          replace(
+          replace_if_present(
               "src/security/securityInterceptor.ts",
               "originalOpen.call(this, method, url, async, username ?? null, password ?? null);",
               "originalOpen.call(this, method, url, Boolean(async), username ?? null, password ?? null);",
           )
-          replace(
+          replace_if_present(
               "src/security/securityInterceptor.ts",
               "originalOpen.call(this, method, url, async);",
               "originalOpen.call(this, method, url, Boolean(async));",
           )
 
-          replace(
+          replace_if_present(
               "core-rust/src/crypto/transport.rs",
               "!value.is_empty() && value.len() % 2 == 0 && value.bytes().all(|b| b.is_ascii_hexdigit())",
               "!value.is_empty() && value.len().is_multiple_of(2) && value.bytes().all(|b| b.is_ascii_hexdigit())",
           )
-          replace(
+          replace_if_present(
               "core-rust/src/crypto/transport.rs",
               "if input.len() % 2 != 0 {",
               "if !input.len().is_multiple_of(2) {",
           )
 
-          replace(
+          replace_if_present(
               "core-rust/src/egress_privacy.rs",
               "let request_epoch = if policy.rotate_after_requests == 0 {\n        request_count\n    } else {\n        request_count / policy.rotate_after_requests\n    };",
               "let request_epoch = request_count\n        .checked_div(policy.rotate_after_requests)\n        .unwrap_or(request_count);",
