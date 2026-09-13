@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "atibon-core"
-version = "3.0.0"
+version = "3.1.0"
 description = "Installable Python bindings for the ATIBON sovereign defensive firewall core"
 readme = "README.md"
 requires-python = ">=3.10"
