@@ -12,6 +12,40 @@ Le binaire `atibon-agent` valide puis applique un ruleset nftables versionné. L
 
 Voir `deploy/host/README.md`.
 
+## Apprentissage gouverné et anti-empoisonnement
+
+ATIBON n'applique plus d'apprentissage direct à partir d'un événement brut. Le cycle de gouvernance est strictement séquentiel :
+
+```text
+événement
+   ↓
+classification
+   ↓
+décision
+   ↓
+résultat observé
+   ↓
+feedback de confiance
+   ↓
+apprentissage/statistique
+   ↓
+politique candidate
+   ↓
+validation intégrité + sécurité + compatibilité
+   ↓
+Shadow Mode (aucune mutation production)
+   ↓
+validation humaine ou automatique
+   ↓
+Poisoning Guard
+   ↓
+promotion de la politique active
+```
+
+Un événement brut ne possède aucun chemin direct vers la politique active. Le bridge Python `AtibonEngine.governed_learning()` appelle `poisoning_guard.py` avant la promotion; la passe native de préparation est explicitement non-promouvable, puis une seconde passe n'est autorisée à promouvoir que si le garde-fou a validé le flux et si les autres portes sont satisfaites.
+
+Le `PoisoningGuard` vérifie notamment la continuité de lignée par `event_id`, les relectures/replays, les bornes numériques, la présence des digests et la confiance du feedback. La politique candidate reste un artefact de Shadow tant que toutes les portes ne sont pas satisfaites.
+
 ## Egress et adresse IP
 
 ATIBON ne rend pas une adresse IP « invisible » et ne permet pas d'usurper arbitrairement une adresse source. Pour une sortie via confidentialité, le flux réel est :
@@ -83,7 +117,7 @@ Client / serveur interne
 ```text
 atibon/
 ├── core-rust/       # DPI, conntrack, règles fail-closed, egress, consensus, crypto
-├── bridge-python/   # package Python atibon_core
+├── bridge-python/   # package Python atibon_core + garde anti-empoisonnement
 ├── ml-engine/       # modèles robustes et défense anti-empoisonnement
 ├── zero-trust/      # mTLS/PQC policy et TPM 2.0
 ├── deploy/host/     # enforcement Linux nftables + systemd
@@ -92,6 +126,6 @@ atibon/
 
 ## Production
 
-Le déploiement recommandé est: shadow/observe-only, validation des flux, activation progressive de l'enforcement, puis surveillance continue.
+Le déploiement recommandé est: shadow/observe-only, validation des flux, activation progressive de l'enforcement, puis surveillance continue. Pour l'apprentissage, la promotion doit rester séparée de l'observation et soumise aux validations d'intégrité, de Shadow Mode et d'approbation.
 
 Les profils Common Criteria EAL4+ et FIPS sont des cibles de préparation et ne constituent pas une certification. L'utilisation réelle d'un HSM/PKCS#11, d'un TPM 2.0, d'un NAT/proxy et d'un backend PQC dépend du matériel, des bibliothèques système, des adresses réellement attribuées et de la politique de l'environnement cible.
