@@ -408,13 +408,15 @@ fn is_fixed_hex(value: &str, bytes: usize) -> bool {
     is_hex(value) && value.len() == bytes * 2
 }
 fn is_hex(value: &str) -> bool {
-    !value.is_empty() && value.len() % 2 == 0 && value.bytes().all(|b| b.is_ascii_hexdigit())
+    !value.is_empty()
+        && value.len().is_multiple_of(2)
+        && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 fn decode_hex(input: &str) -> Result<Vec<u8>, String> {
-    if input.len() % 2 != 0 {
+    if !input.len().is_multiple_of(2) {
         return Err("hex input must have even length".into());
     }
     (0..input.len())

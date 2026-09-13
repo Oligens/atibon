@@ -71,11 +71,9 @@ pub fn decide(
     request_count: u64,
     policy: &EgressPolicy,
 ) -> EgressDecision {
-    let request_epoch = if policy.rotate_after_requests == 0 {
-        request_count
-    } else {
-        request_count / policy.rotate_after_requests
-    };
+    let request_epoch = request_count
+        .checked_div(policy.rotate_after_requests)
+        .unwrap_or(request_count);
     let suspicious = reputation_score >= policy.suspicious_threshold;
 
     let (mode, relay, reason) = if !policy.enabled {

@@ -116,8 +116,8 @@ impl PqcFacade {
     pub fn kem_health(&self) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_kem::{kem::Kem, MlKem768};
             use ml_kem::kem::{Decapsulate, Encapsulate};
+            use ml_kem::{kem::Kem, MlKem768};
 
             let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
             let (ct, send) = ek.encapsulate();
