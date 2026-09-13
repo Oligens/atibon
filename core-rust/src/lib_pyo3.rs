@@ -150,7 +150,7 @@ fn open_barrier(
     )
     .map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&result)
-        .map_err(pyo3::exceptions::PyRuntimeError::new_err)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
 
 #[pyfunction]
