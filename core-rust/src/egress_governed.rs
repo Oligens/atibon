@@ -113,8 +113,10 @@ pub fn evaluate(
         RuntimeMode::Shadow => (RouteDecision::Allow, false),
         RuntimeMode::Enforce => (simulated, matches!(simulated, RouteDecision::Quarantine)),
     };
-    let nat_proxy = matches!(effective, RouteDecision::Allow | RouteDecision::PrivacyRoute)
-        && (matches!(effective, RouteDecision::PrivacyRoute) || approved_relay.is_some());
+    let nat_proxy = matches!(
+        effective,
+        RouteDecision::Allow | RouteDecision::PrivacyRoute
+    ) && (matches!(effective, RouteDecision::PrivacyRoute) || approved_relay.is_some());
     let relay = if matches!(effective, RouteDecision::PrivacyRoute) {
         approved_relay.clone()
     } else {
@@ -162,10 +164,8 @@ mod tests {
     use super::*;
 
     fn audit() -> JsonlAudit {
-        JsonlAudit::open(
-            std::env::temp_dir().join(format!("atibon-egress-{}.jsonl", now_secs())),
-        )
-        .expect("audit")
+        JsonlAudit::open(std::env::temp_dir().join(format!("atibon-egress-{}.jsonl", now_secs())))
+            .expect("audit")
     }
 
     #[test]
@@ -176,8 +176,7 @@ mod tests {
             policy_score: 90,
             request_count: 1,
         };
-        let result =
-            evaluate(&input, RuntimeMode::Shadow, None, &mut audit()).expect("evaluation");
+        let result = evaluate(&input, RuntimeMode::Shadow, None, &mut audit()).expect("evaluation");
         assert_eq!(result.simulated_decision, RouteDecision::Quarantine);
         assert_eq!(result.effective_decision, RouteDecision::Allow);
         assert!(!result.packet_blocked);
@@ -214,8 +213,7 @@ mod tests {
             policy_score: 60,
             request_count: 1,
         };
-        let result =
-            evaluate(&input, RuntimeMode::Enforce, None, &mut audit()).expect("evaluation");
+        let result = evaluate(&input, RuntimeMode::Enforce, None, &mut audit()).expect("evaluation");
         assert_eq!(result.effective_decision, RouteDecision::Quarantine);
         assert!(result.packet_blocked);
     }
