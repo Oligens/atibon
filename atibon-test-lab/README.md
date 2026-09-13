@@ -10,48 +10,61 @@ Le lab mesure le comportement d'ATIBON face à des représentations contrôlées
 
 ## Vecteurs
 
-| ID | Vecteur | Simulation sûre |
-|---|---|---|
-| V01 | Reconnaissance | événements de découverte synthétiques |
-| V02 | Scans | séquence de ports/ressources simulée |
-| V03 | Brute-force | série de tentatives d'authentification synthétiques |
-| V04 | Credential attacks | identifiants factices uniquement |
-| V05 | Web attacks | requêtes HTTP malveillantes synthétiques |
-| V06 | Malware simulation | indicateurs comportementaux inertes |
-| V07 | Lateral movement | graphe de déplacement synthétique |
-| V08 | Exfiltration simulation | flux de volume/ destination simulés, sans données |
-| V09 | Abnormal egress | destination/volume anormal synthétique |
-| V10 | DNS abuse | motifs DNS synthétiques |
-| V11 | TLS anomalies | métadonnées TLS anormales synthétiques |
-| V12 | API abuse | appels API synthétiques hors profil |
-| V13 | Resource exhaustion | charge logique bornée, sans épuisement réel |
+V01 reconnaissance; V02 scans; V03 brute-force; V04 credential attacks; V05 web attacks; V06 malware simulation; V07 lateral movement; V08 exfiltration simulation; V09 abnormal egress; V10 DNS abuse; V11 TLS anomalies; V12 API abuse; V13 resource exhaustion.
 
-## Protocole
+Les définitions exactes sont dans `scenarios.json`. Chaque campagne doit également inclure un **contrôle bénin** afin de mesurer les faux positifs.
 
-1. Installer ATIBON et démarrer en Shadow Mode.
-2. Réinitialiser l'état et enregistrer l'heure monotone de début.
-3. Exécuter `python3 run_campaign.py --scenario all --repetitions 5 --output results.json`.
-4. Pour chaque scénario, conserver l'événement, la décision attendue, la décision ATIBON, les timestamps et les compteurs système.
-5. Rejouer exactement le même jeu de scénarios avec le même nombre de répétitions.
-6. Comparer les métriques et exporter le rapport JSON.
-7. Répéter en Enforce Mode dans un environnement de test autorisé.
+## Exécution reproductible
+
+```bash
+cd atibon-test-lab
+python3 run_campaign.py --scenario all --repetitions 5 --mode shadow --output results-shadow.json
+python3 run_campaign.py --scenario all --repetitions 5 --mode enforce --output results-enforce.json
+```
+
+Pour une campagne auditable, enregistrer le SHA du commit testé, `git diff --exit-code`, la version de Python/Rust, l'OS, la configuration ATIBON, le mode d'exécution, le nombre de répétitions et les fichiers de résultats. Un second passage doit utiliser exactement les mêmes scénarios et paramètres.
 
 ## Mesures
 
-- **TP** : attaque simulée détectée/bloquée comme attendu.
-- **FP** : trafic bénin de contrôle classifié comme attaque.
-- **FN** : attaque simulée non détectée.
-- **Detection Time** : événement → décision de détection.
-- **Blocking Time** : événement → décision effective de blocage.
-- **CPU overhead** : différence CPU entre baseline et campagne.
-- **Memory overhead** : différence RSS entre baseline et campagne.
-- **Network latency** : différence de latence mesurée par rapport au contrôle.
-- **Recovery Time** : retour à l'état nominal après la fin du scénario.
+- **TP** : scénario malveillant simulé détecté comme attendu.
+- **FP** : contrôle bénin détecté à tort.
+- **FN** : scénario malveillant simulé non détecté.
+- **Detection Time** : temps monotone entre injection de l'événement synthétique et décision de détection.
+- **Blocking Time** : temps entre injection et décision effective de blocage en Enforce Mode; en Shadow Mode, une décision simulée ne constitue pas un blocage.
+- **CPU overhead** : différence entre charge CPU de la campagne et baseline correspondante.
+- **Memory overhead** : différence de RSS entre campagne et baseline.
+- **Network latency** : différence de latence d'un chemin de contrôle autorisé par rapport à la même mesure avec ATIBON.
+- **Recovery Time** : temps entre la fin du scénario et retour aux seuils nominaux définis par le protocole.
 
-Les mesures temporelles sont prises avec une horloge monotone. Les résultats doivent être rapportés avec moyenne, médiane, p95 et nombre de répétitions; ne pas confondre absence de mesure avec zéro.
+Les mesures non fournies par l'adaptateur local restent `null`; elles ne doivent jamais être transformées en zéro. Pour les temps et ressources, rapporter au minimum moyenne, médiane, p95 et nombre d'échantillons.
 
-## Reproductibilité
+## Adaptateur ATIBON
 
-Conserver avec chaque campagne : commit ATIBON, version Rust/Python, OS, configuration, mode Shadow/Enforce, seed éventuel, nombre de répétitions et fichier `results.json`.
+`run_campaign.py` constitue le harnais déterministe et sans danger. Le raccordement à une instance ATIBON de laboratoire doit être fait par un adaptateur local autorisé qui :
 
-Aucune campagne ne doit cibler un système tiers ou une adresse publique non autorisée.
+1. injecte un événement synthétique dans l'interface de test;
+2. récupère la classification et la décision;
+3. récupère les timestamps de décision/blocage;
+4. échantillonne CPU/RSS;
+5. mesure la latence d'un endpoint de contrôle;
+6. mesure le retour à l'état nominal;
+7. ne transmet jamais de charge vers une cible externe.
+
+L'adaptateur doit conserver les mêmes identifiants de scénario et répétition afin de rendre les résultats traçables.
+
+## Procédure auditeur / testeur externe
+
+1. Préparer une VM ou un réseau de laboratoire isolé et autorisé.
+2. Vérifier que la cible de test est locale et qu'aucune route de campagne ne vise Internet ou un tiers.
+3. Cloner le dépôt et noter le commit exact.
+4. Installer les dépendances documentées par ATIBON.
+5. Vérifier `scenarios.json` et le contrôle bénin.
+6. Exécuter au moins 5 répétitions en Shadow Mode.
+7. Exécuter les mêmes répétitions en Enforce Mode si l'environnement autorise le blocage.
+8. Archiver les deux JSON, les logs ATIBON et les informations système.
+9. Calculer les métriques sans modifier les résultats bruts.
+10. Publier le protocole, le commit, les paramètres et les résultats afin qu'une tierce partie puisse rejouer exactement la campagne.
+
+### Critères d'interprétation
+
+Un score de détection seul ne suffit pas. Une campagne est considérée exploitable seulement si les TP/FP/FN, les distributions temporelles et les surcoûts CPU/mémoire sont disponibles, avec les valeurs manquantes explicitement signalées. Les résultats d'un banc synthétique ne constituent pas une preuve de sécurité en production.
