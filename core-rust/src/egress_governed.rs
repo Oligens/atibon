@@ -36,6 +36,7 @@ pub struct EgressTrace {
     pub effective_decision: RouteDecision,
     pub relay: Option<String>,
     pub nat_proxy: bool,
+    pub source_ip_rewrite: bool,
     pub packet_blocked: bool,
     pub shadow_mismatch: bool,
     pub reason: String,
@@ -48,6 +49,7 @@ pub struct EgressResult {
     pub effective_decision: RouteDecision,
     pub relay: Option<String>,
     pub nat_proxy: bool,
+    pub source_ip_rewrite: bool,
     pub packet_blocked: bool,
     pub audit_written: bool,
     pub shadow_mismatch: bool,
@@ -105,24 +107,28 @@ pub fn evaluate(
     approved_relay: Option<String>,
     audit: &mut JsonlAudit,
 ) -> std::io::Result<EgressResult> {
-    // Exact order: TRAFFIC -> Reputation -> Risk/Policy -> optional Approved Relay
-    // -> NAT/Proxy -> Audit. Shadow computes this entire path but never blocks traffic.
+    // The policy engine only selects an approved relay. It never accepts or
+    // fabricates an arbitrary source IP. Actual NAT/source-address selection
+    // belongs to the OS/provider-controlled relay dataplane.
+    // Exact order: TRAFFIC -> Reputation -> Risk/Policy -> Approved Relay
+    // -> NAT/Proxy -> Audit. Shadow evaluates the same decision but never blocks.
     let relay_available = approved_relay.is_some();
     let simulated = simulated_decision(input, relay_available);
     let (effective, blocked) = match mode {
         RuntimeMode::Shadow => (RouteDecision::Allow, false),
         RuntimeMode::Enforce => (simulated, matches!(simulated, RouteDecision::Quarantine)),
     };
-    let nat_proxy = matches!(
-        effective,
-        RouteDecision::Allow | RouteDecision::PrivacyRoute
-    ) && (matches!(effective, RouteDecision::PrivacyRoute)
-        || approved_relay.is_some());
-    let relay = if matches!(effective, RouteDecision::PrivacyRoute) {
+
+    let privacy_route = matches!(effective, RouteDecision::PrivacyRoute);
+    let relay = if privacy_route {
         approved_relay.clone()
     } else {
         None
     };
+    // This flag means that the selected path requires the configured relay's
+    // NAT/proxy. It is not an instruction to rewrite an arbitrary IP address.
+    let nat_proxy = privacy_route && relay.is_some();
+    let source_ip_rewrite = false;
 
     let trace = EgressTrace {
         timestamp: now_secs(),
@@ -134,12 +140,13 @@ pub fn evaluate(
         effective_decision: effective,
         relay,
         nat_proxy,
+        source_ip_rewrite,
         packet_blocked: blocked,
         shadow_mismatch: mode == RuntimeMode::Shadow && simulated != effective,
         reason: match simulated {
-            RouteDecision::Allow => "reputation/policy allow".into(),
+            RouteDecision::Allow => "reputation/policy allow; normal egress".into(),
             RouteDecision::PrivacyRoute => {
-                "privacy route requires approved relay then NAT/proxy".into()
+                "privacy route uses an approved relay; NAT/proxy address is provider/OS assigned".into()
             }
             RouteDecision::Quarantine => {
                 "risk/policy decision requires controlled quarantine".into()
@@ -154,6 +161,7 @@ pub fn evaluate(
         effective_decision: effective,
         relay: trace.relay,
         nat_proxy,
+        source_ip_rewrite,
         packet_blocked: blocked,
         audit_written: true,
         shadow_mismatch: trace.shadow_mismatch,
@@ -183,10 +191,11 @@ mod tests {
         assert_eq!(result.effective_decision, RouteDecision::Allow);
         assert!(!result.packet_blocked);
         assert!(result.shadow_mismatch);
+        assert!(!result.source_ip_rewrite);
     }
 
     #[test]
-    fn enforce_privacy_route_uses_relay_and_nat_proxy() {
+    fn enforce_privacy_route_uses_only_selected_relay_for_nat_proxy() {
         let input = EgressInput {
             destination: "suspicious.example".into(),
             reputation_score: 90,
@@ -202,8 +211,9 @@ mod tests {
         .expect("evaluation");
         assert_eq!(result.simulated_decision, RouteDecision::PrivacyRoute);
         assert_eq!(result.effective_decision, RouteDecision::PrivacyRoute);
-        assert!(result.relay.is_some());
+        assert_eq!(result.relay.as_deref(), Some("relay://approved"));
         assert!(result.nat_proxy);
+        assert!(!result.source_ip_rewrite);
         assert!(!result.packet_blocked);
     }
 
@@ -219,5 +229,27 @@ mod tests {
             evaluate(&input, RuntimeMode::Enforce, None, &mut audit()).expect("evaluation");
         assert_eq!(result.effective_decision, RouteDecision::Quarantine);
         assert!(result.packet_blocked);
+        assert!(!result.nat_proxy);
+        assert!(!result.source_ip_rewrite);
+    }
+
+    #[test]
+    fn direct_allow_never_enables_nat_proxy_or_source_ip_rewrite() {
+        let input = EgressInput {
+            destination: "example.com".into(),
+            reputation_score: 10,
+            policy_score: 10,
+            request_count: 1,
+        };
+        let result = evaluate(
+            &input,
+            RuntimeMode::Enforce,
+            Some("relay://approved".into()),
+            &mut audit(),
+        )
+        .expect("evaluation");
+        assert_eq!(result.effective_decision, RouteDecision::Allow);
+        assert!(!result.nat_proxy);
+        assert!(!result.source_ip_rewrite);
     }
 }
