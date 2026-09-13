@@ -154,7 +154,7 @@ fn open_barrier(
     )
     .map_err(pyo3::exceptions::PyValueError::new_err)?;
     serde_json::to_string(&result)
-        .map_err(pyo3::exceptions::PyValueError::new_err)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 #[pyfunction]
@@ -259,13 +259,8 @@ fn egress_governed_decide(
     };
     let mut audit = egress_governed::JsonlAudit::open(audit_path)
         .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-    let result = egress_governed::evaluate(
-        &input,
-        mode,
-        approved_relay,
-        &mut audit,
-    )
-    .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+    let result = egress_governed::evaluate(&input, mode, approved_relay, &mut audit)
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
     serde_json::to_string(&result)
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
 }
