@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "scenarios": [
+    {"id":"V01","vector":"reconnaissance","event_type":"synthetic.reconnaissance","severity":0.90},
+    {"id":"V02","vector":"scans","event_type":"synthetic.scans","severity":0.90},
+    {"id":"V03","vector":"brute-force","event_type":"synthetic.brute-force","severity":0.90},
+    {"id":"V04","vector":"credential-attacks","event_type":"synthetic.credential-attacks","severity":0.90},
+    {"id":"V05","vector":"web-attacks","event_type":"synthetic.web-attacks","severity":0.90},
+    {"id":"V06","vector":"malware-simulation","event_type":"synthetic.malware-simulation","severity":0.90},
+    {"id":"V07","vector":"lateral-movement","event_type":"synthetic.lateral-movement","severity":0.90},
+    {"id":"V08","vector":"exfiltration-simulation","event_type":"synthetic.exfiltration-simulation","severity":0.90},
+    {"id":"V09","vector":"abnormal-egress","event_type":"synthetic.abnormal-egress","severity":0.90},
+    {"id":"V10","vector":"dns-abuse","event_type":"synthetic.dns-abuse","severity":0.90},
+    {"id":"V11","vector":"tls-anomalies","event_type":"synthetic.tls-anomalies","severity":0.90},
+    {"id":"V12","vector":"api-abuse","event_type":"synthetic.api-abuse","severity":0.90},
+    {"id":"V13","vector":"resource-exhaustion","event_type":"synthetic.resource-exhaustion","severity":0.90}
+  ],
+  "control": {"event_type":"synthetic.benign","severity":0.05,"expected_detection":false,"expected_blocking":false}
+}
