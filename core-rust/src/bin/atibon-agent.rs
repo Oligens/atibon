@@ -93,7 +93,7 @@ fn ced_mode(args: &[String]) -> ExitCode {
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
     if args.iter().any(|a| a == "--health") {
-        println!(r#"{"service":"atibon-agent","status":"ok","enforcement":"nftables","ced":"enabled","pqc":"ML-KEM-768/ML-DSA-65 ready"}"#);
+        println!(r#"{{"service":"atibon-agent","status":"ok","enforcement":"nftables","ced":"enabled","pqc":"ML-KEM-768/ML-DSA-65 ready"}}"#);
         return ExitCode::SUCCESS;
     }
     if args.iter().any(|a| a == "--ced-telemetry") {
