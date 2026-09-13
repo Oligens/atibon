@@ -52,7 +52,12 @@ impl Default for ResourceGovernor {
 }
 
 impl ResourceGovernor {
-    pub fn admit(&mut self, generation: u64, request: &ResourceRequest, now: u64) -> Result<(), String> {
+    pub fn admit(
+        &mut self,
+        generation: u64,
+        request: &ResourceRequest,
+        now: u64,
+    ) -> Result<(), String> {
         self.reset_window_if_needed(now);
         if self.active_agents >= MAX_ACTIVE_AGENTS {
             return Err("resource governor: MAX_ACTIVE_AGENTS exceeded".into());
@@ -78,7 +83,12 @@ impl ResourceGovernor {
         self.active_agents = self.active_agents.saturating_sub(1);
     }
 
-    pub fn admit_regeneration(&mut self, generation: u64, request: &ResourceRequest, now: u64) -> Result<(), String> {
+    pub fn admit_regeneration(
+        &mut self,
+        generation: u64,
+        request: &ResourceRequest,
+        now: u64,
+    ) -> Result<(), String> {
         self.reset_window_if_needed(now);
         if self.regenerations_in_window >= MAX_REGENERATION_RATE {
             return Err("resource governor: MAX_REGENERATION_RATE exceeded".into());
@@ -144,22 +154,70 @@ pub struct PipelineResult {
 
 pub fn default_thresholds() -> Vec<ThresholdStage> {
     vec![
-        ThresholdStage { agent_id: 1, name: "detection".into(), threshold: 0.50 },
-        ThresholdStage { agent_id: 2, name: "behavior".into(), threshold: 0.55 },
-        ThresholdStage { agent_id: 3, name: "reputation".into(), threshold: 0.60 },
-        ThresholdStage { agent_id: 4, name: "correlation".into(), threshold: 0.62 },
-        ThresholdStage { agent_id: 5, name: "forensics".into(), threshold: 0.65 },
-        ThresholdStage { agent_id: 6, name: "integrity".into(), threshold: 0.68 },
-        ThresholdStage { agent_id: 7, name: "risk".into(), threshold: 0.70 },
-        ThresholdStage { agent_id: 8, name: "barrier-analysis".into(), threshold: 0.72 },
-        ThresholdStage { agent_id: 9, name: "containment".into(), threshold: 0.75 },
-        ThresholdStage { agent_id: 10, name: "validation".into(), threshold: 0.78 },
-        ThresholdStage { agent_id: 11, name: "learning".into(), threshold: 0.80 },
+        ThresholdStage {
+            agent_id: 1,
+            name: "detection".into(),
+            threshold: 0.50,
+        },
+        ThresholdStage {
+            agent_id: 2,
+            name: "behavior".into(),
+            threshold: 0.55,
+        },
+        ThresholdStage {
+            agent_id: 3,
+            name: "reputation".into(),
+            threshold: 0.60,
+        },
+        ThresholdStage {
+            agent_id: 4,
+            name: "correlation".into(),
+            threshold: 0.62,
+        },
+        ThresholdStage {
+            agent_id: 5,
+            name: "forensics".into(),
+            threshold: 0.65,
+        },
+        ThresholdStage {
+            agent_id: 6,
+            name: "integrity".into(),
+            threshold: 0.68,
+        },
+        ThresholdStage {
+            agent_id: 7,
+            name: "risk".into(),
+            threshold: 0.70,
+        },
+        ThresholdStage {
+            agent_id: 8,
+            name: "barrier-analysis".into(),
+            threshold: 0.72,
+        },
+        ThresholdStage {
+            agent_id: 9,
+            name: "containment".into(),
+            threshold: 0.75,
+        },
+        ThresholdStage {
+            agent_id: 10,
+            name: "validation".into(),
+            threshold: 0.78,
+        },
+        ThresholdStage {
+            agent_id: 11,
+            name: "learning".into(),
+            threshold: 0.80,
+        },
     ]
 }
 
 fn normalize_score(score: f64) -> f64 {
-    if score.is_finite() { score.clamp(0.0, 1.0) } else { 1.0 }
+    if score.is_finite() {
+        score.clamp(0.0, 1.0)
+    } else {
+        1.0
+    }
 }
 
 fn now_ms() -> u64 {
@@ -185,7 +243,10 @@ pub fn evaluate_pipeline(attack_score: f64, stage_scores: &[f64]) -> PipelineRes
             passed,
         });
         if !passed {
-            blocked_reason = Some(format!("agent {} blocked below threshold {:.2}", stage.agent_id, stage.threshold));
+            blocked_reason = Some(format!(
+                "agent {} blocked below threshold {:.2}",
+                stage.agent_id, stage.threshold
+            ));
             break;
         }
     }
@@ -215,7 +276,13 @@ pub fn validate_barrier(candidate: &BarrierCandidate) -> BarrierValidation {
     } else {
         "ABR candidate rejected before activation".into()
     };
-    BarrierValidation { security_ok, cost_ok, compatibility_ok, approved, reason }
+    BarrierValidation {
+        security_ok,
+        cost_ok,
+        compatibility_ok,
+        approved,
+        reason,
+    }
 }
 
 pub fn regenerate_barrier(
@@ -312,7 +379,11 @@ mod tests {
     #[test]
     fn governor_rejects_resource_exhaustion() {
         let mut governor = ResourceGovernor::default();
-        let request = ResourceRequest { cpu_percent: 81, memory_bytes: 1024, latency_ms: 10 };
+        let request = ResourceRequest {
+            cpu_percent: 81,
+            memory_bytes: 1024,
+            latency_ms: 10,
+        };
         assert!(governor.admit(0, &request, 0).is_err());
     }
 
@@ -340,8 +411,13 @@ mod tests {
     #[test]
     fn generation_depth_is_hard_bounded() {
         let mut governor = ResourceGovernor::default();
-        let error = regenerate_barrier(&mut governor, candidate(MAX_GENERATION_DEPTH + 1), None, 1_000)
-            .expect_err("generation depth must be rejected");
+        let error = regenerate_barrier(
+            &mut governor,
+            candidate(MAX_GENERATION_DEPTH + 1),
+            None,
+            1_000,
+        )
+        .expect_err("generation depth must be rejected");
         assert!(error.contains("MAX_GENERATION_DEPTH"));
     }
 }
