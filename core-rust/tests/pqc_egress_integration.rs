@@ -8,7 +8,7 @@ mod pqc_native {
     use ml_dsa::{Keypair, MlDsa65};
     use ml_kem::{
         kem::{Decapsulate, Encapsulate, Kem},
-        KeyExport, MlKem768,
+        MlKem768,
     };
 
     use atibon_core::crypto::transport::{
@@ -34,7 +34,8 @@ mod pqc_native {
         }
 
         let (recipient_dk, recipient_ek) = MlKem768::generate_keypair();
-        let recipient_public_key = hex(recipient_ek.to_bytes().as_slice());
+        let recipient_public_key =
+            hex(AsRef::<[u8]>::as_ref(&recipient_ek.to_bytes()));
 
         let policy = BarrierPolicy {
             policy_id: "pqc-egress-test".into(),
@@ -81,8 +82,10 @@ mod pqc_native {
         assert!(opened.accepted);
         assert_eq!(opened.policy, policy);
 
-        let audit_path =
-            std::env::temp_dir().join(format!("atibon-pqc-egress-{}.jsonl", std::process::id()));
+        let audit_path = std::env::temp_dir().join(format!(
+            "atibon-pqc-egress-{}.jsonl",
+            std::process::id()
+        ));
         let mut audit = JsonlAudit::open(&audit_path).expect("audit log");
         let egress = evaluate(
             &EgressInput {
