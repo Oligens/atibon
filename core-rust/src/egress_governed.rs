@@ -6,10 +6,17 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub enum RuntimeMode { Shadow, Enforce }
+pub enum RuntimeMode {
+    Shadow,
+    Enforce,
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-pub enum RouteDecision { Allow, Quarantine, PrivacyRoute }
+pub enum RouteDecision {
+    Allow,
+    Quarantine,
+    PrivacyRoute,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct EgressInput {
@@ -49,16 +56,22 @@ pub struct EgressResult {
     pub shadow_mismatch: bool,
 }
 
-pub struct JsonlAudit { writer: BufWriter<std::fs::File> }
+pub struct JsonlAudit {
+    writer: BufWriter<std::fs::File>,
+}
 
 impl JsonlAudit {
     pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
         let path = path.as_ref();
         if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() { create_dir_all(parent)?; }
+            if !parent.as_os_str().is_empty() {
+                create_dir_all(parent)?;
+            }
         }
         let file = OpenOptions::new().create(true).append(true).open(path)?;
-        Ok(Self { writer: BufWriter::new(file) })
+        Ok(Self {
+            writer: BufWriter::new(file),
+        })
     }
 
     fn write(&mut self, trace: &EgressTrace) -> std::io::Result<()> {
@@ -69,18 +82,30 @@ impl JsonlAudit {
 }
 
 fn now_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 fn current_time_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 fn simulated_decision(input: &EgressInput, relay_available: bool) -> RouteDecision {
     let risk_triggered = input.policy_score >= 80 || input.reputation_score >= 70;
     if risk_triggered {
-        if relay_available { RouteDecision::PrivacyRoute } else { RouteDecision::Quarantine }
-    } else { RouteDecision::Allow }
+        if relay_available {
+            RouteDecision::PrivacyRoute
+        } else {
+            RouteDecision::Quarantine
+        }
+    } else {
+        RouteDecision::Allow
+    }
 }
 
 /// Existing governed Egress API. Kept backward-compatible for callers that
@@ -115,9 +140,15 @@ pub fn evaluate(
     };
     audit.write(&trace)?;
     Ok(EgressResult {
-        mode, simulated_decision: simulated, effective_decision: effective,
-        relay: trace.relay, nat_proxy, source_ip_rewrite: false,
-        packet_blocked: blocked, audit_written: true, shadow_mismatch: trace.shadow_mismatch,
+        mode,
+        simulated_decision: simulated,
+        effective_decision: effective,
+        relay: trace.relay,
+        nat_proxy,
+        source_ip_rewrite: false,
+        packet_blocked: blocked,
+        audit_written: true,
+        shadow_mismatch: trace.shadow_mismatch,
     })
 }
 
@@ -144,7 +175,9 @@ pub fn evaluate_with_pi_hop(
     let privacy_route = matches!(effective, RouteDecision::PrivacyRoute);
     let selected_relay = if privacy_route {
         PiHopSchedule::new(approved_relays, epoch).relay_for(now_ms)
-    } else { None };
+    } else {
+        None
+    };
     let relay = selected_relay.map(|r| r.endpoint.to_owned());
     let nat_proxy = privacy_route && selected_relay.is_some();
     let trace = EgressTrace {
@@ -161,9 +194,15 @@ pub fn evaluate_with_pi_hop(
     };
     audit.write(&trace)?;
     Ok(EgressResult {
-        mode, simulated_decision: simulated, effective_decision: effective,
-        relay: trace.relay, nat_proxy, source_ip_rewrite: false,
-        packet_blocked: blocked, audit_written: true, shadow_mismatch: trace.shadow_mismatch,
+        mode,
+        simulated_decision: simulated,
+        effective_decision: effective,
+        relay: trace.relay,
+        nat_proxy,
+        source_ip_rewrite: false,
+        packet_blocked: blocked,
+        audit_written: true,
+        shadow_mismatch: trace.shadow_mismatch,
     })
 }
 
@@ -172,23 +211,53 @@ mod tests {
     use super::*;
 
     const RELAYS: [ApprovedRelay; 4] = [
-        ApprovedRelay { id: "relay-a", endpoint: "relay-a.internal" },
-        ApprovedRelay { id: "relay-b", endpoint: "relay-b.internal" },
-        ApprovedRelay { id: "relay-c", endpoint: "relay-c.internal" },
-        ApprovedRelay { id: "relay-d", endpoint: "relay-d.internal" },
+        ApprovedRelay {
+            id: "relay-a",
+            endpoint: "relay-a.internal",
+        },
+        ApprovedRelay {
+            id: "relay-b",
+            endpoint: "relay-b.internal",
+        },
+        ApprovedRelay {
+            id: "relay-c",
+            endpoint: "relay-c.internal",
+        },
+        ApprovedRelay {
+            id: "relay-d",
+            endpoint: "relay-d.internal",
+        },
     ];
 
     fn audit() -> JsonlAudit {
-        JsonlAudit::open(std::env::temp_dir().join(format!("atibon-egress-{}-{}.jsonl", std::process::id(), current_time_ms()))).expect("audit")
+        JsonlAudit::open(std::env::temp_dir().join(format!(
+            "atibon-egress-{}-{}.jsonl",
+            std::process::id(),
+            current_time_ms()
+        )))
+        .expect("audit")
     }
 
     fn risky_input() -> EgressInput {
-        EgressInput { destination: "suspicious.example".into(), reputation_score: 90, policy_score: 60, request_count: 1 }
+        EgressInput {
+            destination: "suspicious.example".into(),
+            reputation_score: 90,
+            policy_score: 60,
+            request_count: 1,
+        }
     }
 
     #[test]
     fn shadow_is_non_blocking_but_records_simulated_privacy_route() {
-        let result = evaluate_with_pi_hop(&risky_input(), RuntimeMode::Shadow, &RELAYS, 0, 1_000, &mut audit()).expect("evaluation");
+        let result = evaluate_with_pi_hop(
+            &risky_input(),
+            RuntimeMode::Shadow,
+            &RELAYS,
+            0,
+            1_000,
+            &mut audit(),
+        )
+        .expect("evaluation");
         assert_eq!(result.simulated_decision, RouteDecision::PrivacyRoute);
         assert_eq!(result.effective_decision, RouteDecision::Allow);
         assert!(!result.packet_blocked);
@@ -199,7 +268,15 @@ mod tests {
 
     #[test]
     fn enforce_privacy_route_uses_pi_hop_selected_approved_relay() {
-        let result = evaluate_with_pi_hop(&risky_input(), RuntimeMode::Enforce, &RELAYS, 0, 1_000, &mut audit()).expect("evaluation");
+        let result = evaluate_with_pi_hop(
+            &risky_input(),
+            RuntimeMode::Enforce,
+            &RELAYS,
+            0,
+            1_000,
+            &mut audit(),
+        )
+        .expect("evaluation");
         let expected = PiHopSchedule::new(&RELAYS, 0).relay_for(1_000).unwrap();
         assert_eq!(result.simulated_decision, RouteDecision::PrivacyRoute);
         assert_eq!(result.effective_decision, RouteDecision::PrivacyRoute);
@@ -211,8 +288,24 @@ mod tests {
 
     #[test]
     fn relay_rotates_when_pi_hop_slot_changes() {
-        let a = evaluate_with_pi_hop(&risky_input(), RuntimeMode::Enforce, &RELAYS, 0, 0, &mut audit()).expect("a");
-        let b = evaluate_with_pi_hop(&risky_input(), RuntimeMode::Enforce, &RELAYS, 0, 100, &mut audit()).expect("b");
+        let a = evaluate_with_pi_hop(
+            &risky_input(),
+            RuntimeMode::Enforce,
+            &RELAYS,
+            0,
+            0,
+            &mut audit(),
+        )
+        .expect("a");
+        let b = evaluate_with_pi_hop(
+            &risky_input(),
+            RuntimeMode::Enforce,
+            &RELAYS,
+            0,
+            100,
+            &mut audit(),
+        )
+        .expect("b");
         assert_ne!(a.relay, b.relay);
     }
 
@@ -231,7 +324,15 @@ mod tests {
 
     #[test]
     fn enforce_quarantines_without_approved_relay() {
-        let result = evaluate_with_pi_hop(&risky_input(), RuntimeMode::Enforce, &[], 0, 1_000, &mut audit()).expect("evaluation");
+        let result = evaluate_with_pi_hop(
+            &risky_input(),
+            RuntimeMode::Enforce,
+            &[],
+            0,
+            1_000,
+            &mut audit(),
+        )
+        .expect("evaluation");
         assert_eq!(result.effective_decision, RouteDecision::Quarantine);
         assert!(result.packet_blocked);
         assert!(!result.nat_proxy);
@@ -240,8 +341,21 @@ mod tests {
 
     #[test]
     fn direct_allow_never_enables_nat_proxy_or_source_ip_rewrite() {
-        let input = EgressInput { destination: "example.com".into(), reputation_score: 10, policy_score: 10, request_count: 1 };
-        let result = evaluate_with_pi_hop(&input, RuntimeMode::Enforce, &RELAYS, 0, 1_000, &mut audit()).expect("evaluation");
+        let input = EgressInput {
+            destination: "example.com".into(),
+            reputation_score: 10,
+            policy_score: 10,
+            request_count: 1,
+        };
+        let result = evaluate_with_pi_hop(
+            &input,
+            RuntimeMode::Enforce,
+            &RELAYS,
+            0,
+            1_000,
+            &mut audit(),
+        )
+        .expect("evaluation");
         assert_eq!(result.effective_decision, RouteDecision::Allow);
         assert!(!result.nat_proxy);
         assert!(!result.source_ip_rewrite);

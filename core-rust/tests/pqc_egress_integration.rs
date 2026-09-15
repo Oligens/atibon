@@ -5,21 +5,29 @@
 mod pqc_native {
     use std::sync::{Mutex, OnceLock};
 
-    use ml_dsa::{MlDsa65, Keypair};
-    use ml_kem::{kem::{Generate, KeyExport}, MlKem768};
+    use ml_dsa::{Keypair, MlDsa65};
+    use ml_kem::{
+        kem::{Generate, KeyExport},
+        MlKem768,
+    };
 
     use atibon::crypto::transport::{open_barrier, seal_barrier, validate_envelope, BarrierPolicy};
     use atibon::egress_governed::{evaluate, EgressInput, JsonlAudit, RouteDecision, RuntimeMode};
 
-    const SIGNING_SEED_HEX: &str = "4242424242424242424242424242424242424242424242424242424242424242";
+    const SIGNING_SEED_HEX: &str =
+        "4242424242424242424242424242424242424242424242424242424242424242";
     static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
-    fn hex(bytes: &[u8]) -> String { bytes.iter().map(|b| format!("{b:02x}")).collect() }
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
 
     #[test]
     fn pqc_barrier_survives_validation_and_governed_egress() {
         let _guard = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
-        unsafe { std::env::set_var("ATIBON_MLDSA65_SEED_HEX", SIGNING_SEED_HEX); }
+        unsafe {
+            std::env::set_var("ATIBON_MLDSA65_SEED_HEX", SIGNING_SEED_HEX);
+        }
 
         let (recipient_dk, recipient_ek) = MlKem768::generate_keypair();
         let recipient_public_key = hex(recipient_ek.to_bytes().as_slice());
@@ -69,7 +77,8 @@ mod pqc_native {
         assert!(opened.accepted);
         assert_eq!(opened.policy, policy);
 
-        let audit_path = std::env::temp_dir().join(format!("atibon-pqc-egress-{}.jsonl", std::process::id()));
+        let audit_path =
+            std::env::temp_dir().join(format!("atibon-pqc-egress-{}.jsonl", std::process::id()));
         let mut audit = JsonlAudit::open(&audit_path).expect("audit log");
         let egress = evaluate(
             &EgressInput {

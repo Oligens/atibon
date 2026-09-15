@@ -143,10 +143,22 @@ mod tests {
     use super::*;
 
     const RELAYS: [ApprovedRelay; 4] = [
-        ApprovedRelay { id: "relay-a", endpoint: "relay-a.internal" },
-        ApprovedRelay { id: "relay-b", endpoint: "relay-b.internal" },
-        ApprovedRelay { id: "relay-c", endpoint: "relay-c.internal" },
-        ApprovedRelay { id: "relay-d", endpoint: "relay-d.internal" },
+        ApprovedRelay {
+            id: "relay-a",
+            endpoint: "relay-a.internal",
+        },
+        ApprovedRelay {
+            id: "relay-b",
+            endpoint: "relay-b.internal",
+        },
+        ApprovedRelay {
+            id: "relay-c",
+            endpoint: "relay-c.internal",
+        },
+        ApprovedRelay {
+            id: "relay-d",
+            endpoint: "relay-d.internal",
+        },
     ];
 
     #[test]
@@ -217,7 +229,9 @@ mod tests {
     fn critical_path_returns_borrowed_relay_without_owned_result() {
         let schedule = PiHopSchedule::new(&RELAYS, 42);
         let relay = schedule.relay_for(12_345).unwrap();
-        assert!(RELAYS.iter().any(|candidate| core::ptr::eq(candidate, relay)));
+        assert!(RELAYS
+            .iter()
+            .any(|candidate| core::ptr::eq(candidate, relay)));
         assert_eq!(schedule.interval_ms(), 100);
     }
 
