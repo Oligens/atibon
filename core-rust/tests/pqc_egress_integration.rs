@@ -22,7 +22,7 @@ mod pqc_native {
         unsafe { std::env::set_var("ATIBON_MLDSA65_SEED_HEX", SIGNING_SEED_HEX); }
 
         let (recipient_dk, recipient_ek) = MlKem768::generate_keypair();
-        let recipient_public_key = hex(recipient_ek.to_bytes().as_ref());
+        let recipient_public_key = hex(recipient_ek.to_bytes().as_slice());
 
         let policy = BarrierPolicy {
             policy_id: "pqc-egress-test".into(),
