@@ -127,10 +127,17 @@ pub fn evaluate(
     let relay = if privacy_route { approved_relay } else { None };
     let nat_proxy = privacy_route && relay.is_some();
     let trace = EgressTrace {
-        timestamp: now_secs(), mode, destination: input.destination.clone(),
-        reputation_score: input.reputation_score, policy_score: input.policy_score,
-        simulated_decision: simulated, effective_decision: effective,
-        relay, nat_proxy, source_ip_rewrite: false, packet_blocked: blocked,
+        timestamp: now_secs(),
+        mode,
+        destination: input.destination.clone(),
+        reputation_score: input.reputation_score,
+        policy_score: input.policy_score,
+        simulated_decision: simulated,
+        effective_decision: effective,
+        relay,
+        nat_proxy,
+        source_ip_rewrite: false,
+        packet_blocked: blocked,
         shadow_mismatch: mode == RuntimeMode::Shadow && simulated != effective,
         reason: match simulated {
             RouteDecision::Allow => "reputation/policy allow; normal egress".into(),
@@ -181,10 +188,17 @@ pub fn evaluate_with_pi_hop(
     let relay = selected_relay.map(|r| r.endpoint.to_owned());
     let nat_proxy = privacy_route && selected_relay.is_some();
     let trace = EgressTrace {
-        timestamp: now_secs(), mode, destination: input.destination.clone(),
-        reputation_score: input.reputation_score, policy_score: input.policy_score,
-        simulated_decision: simulated, effective_decision: effective,
-        relay, nat_proxy, source_ip_rewrite: false, packet_blocked: blocked,
+        timestamp: now_secs(),
+        mode,
+        destination: input.destination.clone(),
+        reputation_score: input.reputation_score,
+        policy_score: input.policy_score,
+        simulated_decision: simulated,
+        effective_decision: effective,
+        relay,
+        nat_proxy,
+        source_ip_rewrite: false,
+        packet_blocked: blocked,
         shadow_mismatch: mode == RuntimeMode::Shadow && simulated != effective,
         reason: match simulated {
             RouteDecision::Allow => "reputation/policy allow; normal egress".into(),
@@ -312,10 +326,10 @@ mod tests {
     #[test]
     fn jitter_acceptance_is_bounded_to_adjacent_slots() {
         let schedule = PiHopSchedule::new(&RELAYS, 0);
-        let previous = *schedule.relay_for(900).unwrap();
-        let current = *schedule.relay_for(1_000).unwrap();
-        let next = *schedule.relay_for(1_100).unwrap();
-        let far = *schedule.relay_for(1_200).unwrap();
+        let previous = schedule.scheduled_relay_for(900).unwrap();
+        let current = schedule.scheduled_relay_for(1_000).unwrap();
+        let next = schedule.scheduled_relay_for(1_100).unwrap();
+        let far = schedule.scheduled_relay_for(1_200).unwrap();
         assert!(schedule.accepts(1_000, &previous));
         assert!(schedule.accepts(1_000, &current));
         assert!(schedule.accepts(1_000, &next));
