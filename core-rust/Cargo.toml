@@ -6,7 +6,7 @@ description = "ATIBON sovereign defensive firewall core"
 license = "Apache-2.0"
 
 [lib]
-name = "_native"
+name = "atibon_core"
 path = "src/lib_pyo3.rs"
 crate-type = ["cdylib", "rlib"]
 
