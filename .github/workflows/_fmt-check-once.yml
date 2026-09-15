@@ -1,0 +1,16 @@
+name: ATIBON one-time fmt check
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  fmt-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+      - run: cargo fmt --all -- --check
