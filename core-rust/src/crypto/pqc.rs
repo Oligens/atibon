@@ -22,7 +22,7 @@ impl PqcFacade {
     pub fn sign_barrier(&self, digest_hex: &str) -> PyResult<String> {
         #[cfg(feature = "pqc-native")]
         {
-            use ml_dsa::{MlDsa65, Signer, SigningKey};
+            use ml_dsa::{Keypair, MlDsa65, Signer, SigningKey};
             let seed_hex = std::env::var("ATIBON_MLDSA65_SEED_HEX").map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("ATIBON_MLDSA65_SEED_HEX is not configured"))?;
             let seed = decode_hex(&seed_hex).map_err(pyo3::exceptions::PyValueError::new_err)?;
             if seed.len() != ML_DSA65_SEED_BYTES { return Err(pyo3::exceptions::PyValueError::new_err("ML-DSA-65 seed must be exactly 32 bytes")); }
@@ -58,7 +58,7 @@ impl PqcFacade {
         #[cfg(feature = "pqc-native")]
         {
             use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
-            use ml_kem::MlKem768;
+            use ml_kem::{KeyExport, MlKem768};
             let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
             let (ct, send) = ek.encapsulate();
             let recv = dk.decapsulate(&ct);
@@ -90,7 +90,7 @@ mod tests {
     #[cfg(feature = "pqc-native")]
     #[test]
     fn ml_dsa65_signature_round_trip_and_tamper_rejection() {
-        use ml_dsa::{MlDsa65, Signer, SigningKey, Verifier};
+        use ml_dsa::{Keypair, MlDsa65, Signer, SigningKey, Verifier};
         let signing_key = SigningKey::<MlDsa65>::from_seed(&[0x42u8; ML_DSA65_SEED_BYTES].into());
         let message = b"ATIBON PQC integration test";
         let signature = signing_key.sign(message);
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn ml_kem768_round_trip_uses_fips203_sizes() {
         use ml_kem::kem::{Decapsulate, Encapsulate, Kem};
-        use ml_kem::MlKem768;
+        use ml_kem::{KeyExport, MlKem768};
         let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
         let (ciphertext, sender_secret) = ek.encapsulate();
         assert_eq!(sender_secret, dk.decapsulate(&ciphertext));
