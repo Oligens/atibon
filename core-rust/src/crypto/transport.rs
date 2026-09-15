@@ -173,6 +173,12 @@ pub fn validate_envelope(
     if envelope.kem_ciphertext_hex.len() != 2176 {
         return Err("ML-KEM-768 ciphertext must be 1088 bytes".into());
     }
+    if envelope.signer_public_key_hex.len() != 3904 {
+        return Err("ML-DSA-65 public key must be 1952 bytes".into());
+    }
+    if envelope.signature_hex.len() != 6618 {
+        return Err("ML-DSA-65 signature must be 3309 bytes".into());
+    }
     Ok(BarrierAcceptance {
         accepted: false,
         reason:
@@ -198,11 +204,9 @@ pub fn seal_barrier(
         ChaCha20Poly1305, Nonce,
     };
     use hkdf::Hkdf;
-    use ml_dsa::{
-        KeyExport, KeyInit as DsaKeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey,
-    };
+    use ml_dsa::{KeyExport, KeyInit as DsaKeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey};
     use ml_kem::{
-        kem::{Encapsulate, EncapsulationKey, Kem},
+        kem::{Encapsulate, EncapsulationKey},
         MlKem768, TryKeyInit,
     };
 
@@ -308,13 +312,8 @@ pub fn open_barrier(
         ChaCha20Poly1305, Nonce,
     };
     use hkdf::Hkdf;
-    use ml_dsa::{
-        KeyInit as DsaKeyInit, MlDsa65, Signature, SignatureEncoding, Verifier, VerifyingKey,
-    };
-    use ml_kem::{
-        kem::{Decapsulate, DecapsulationKey, Kem},
-        MlKem768, TryKeyInit,
-    };
+    use ml_dsa::{KeyInit as DsaKeyInit, MlDsa65, Signature, Verifier, VerifyingKey};
+    use ml_kem::{kem::{Decapsulate, DecapsulationKey}, MlKem768, Seed};
 
     validate_envelope(envelope, now_ms, current_epoch, current_version)?;
     let trusted = decode_hex(trusted_signer_public_key_hex)?;
@@ -331,11 +330,14 @@ pub fn open_barrier(
         .map_err(|_| "ML-DSA signature verification failed".to_string())?;
 
     let private_key = decode_hex(recipient_kem_private_key_hex)?;
-    if private_key.len() != 2400 {
-        return Err("ML-KEM-768 decapsulation key must be 2400 bytes".into());
+    if private_key.len() != 64 {
+        return Err("ML-KEM-768 decapsulation key seed must be exactly 64 bytes".into());
     }
-    let dk = DecapsulationKey::<MlKem768>::new_from_slice(&private_key)
-        .map_err(|_| "invalid ML-KEM-768 decapsulation key encoding".to_string())?;
+    let seed: Seed = private_key
+        .as_slice()
+        .try_into()
+        .map_err(|_| "invalid ML-KEM-768 seed length".to_string())?;
+    let dk = DecapsulationKey::<MlKem768>::from_seed(seed);
     let kem_ct_bytes = decode_hex(&envelope.kem_ciphertext_hex)?;
     let kem_ct = ml_kem::Ciphertext::<MlKem768>::try_from(kem_ct_bytes.as_slice())
         .map_err(|_| "invalid ML-KEM-768 ciphertext".to_string())?;
@@ -407,14 +409,17 @@ pub fn open_barrier(
 fn is_fixed_hex(value: &str, bytes: usize) -> bool {
     is_hex(value) && value.len() == bytes * 2
 }
+
 fn is_hex(value: &str) -> bool {
     !value.is_empty()
         && value.len().is_multiple_of(2)
         && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
 fn decode_hex(input: &str) -> Result<Vec<u8>, String> {
     if !input.len().is_multiple_of(2) {
         return Err("hex input must have even length".into());
@@ -471,8 +476,8 @@ mod tests {
             ciphertext_hex: "cc".repeat(32),
             policy_digest: policy_digest(&p).unwrap(),
             consensus_hash: "dd".repeat(32),
-            signer_public_key_hex: "ee".repeat(32),
-            signature_hex: "ff".repeat(32),
+            signer_public_key_hex: "ee".repeat(1952),
+            signature_hex: "ff".repeat(3309),
         };
         assert!(validate_envelope(&envelope, 1_000, 4, 2).is_err());
     }
