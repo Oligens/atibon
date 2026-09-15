@@ -204,7 +204,9 @@ pub fn seal_barrier(
         ChaCha20Poly1305, Nonce,
     };
     use hkdf::Hkdf;
-    use ml_dsa::{KeyExport, KeyInit as DsaKeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey};
+    use ml_dsa::{
+        KeyExport, KeyInit as DsaKeyInit, Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey,
+    };
     use ml_kem::{
         kem::{Encapsulate, EncapsulationKey},
         MlKem768, TryKeyInit,
@@ -313,7 +315,10 @@ pub fn open_barrier(
     };
     use hkdf::Hkdf;
     use ml_dsa::{KeyInit as DsaKeyInit, MlDsa65, Signature, Verifier, VerifyingKey};
-    use ml_kem::{kem::{Decapsulate, DecapsulationKey}, MlKem768, Seed};
+    use ml_kem::{
+        kem::{Decapsulate, DecapsulationKey},
+        MlKem768, Seed,
+    };
 
     validate_envelope(envelope, now_ms, current_epoch, current_version)?;
     let trusted = decode_hex(trusted_signer_public_key_hex)?;
