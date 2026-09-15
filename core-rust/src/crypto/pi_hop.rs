@@ -44,7 +44,8 @@ impl<'a> PiHopSchedule<'a> {
         }
     }
 
-    /// Creates a scheduler with an explicit positive interval.
+    /// Creates a scheduler with an explicit interval. Zero is rejected by
+    /// `is_valid`; callers should prefer `new` for the fixed 100 ms schedule.
     pub const fn with_interval(relays: &'a [ApprovedRelay], epoch: u64, interval_ms: u64) -> Self {
         Self {
             relays,
@@ -54,18 +55,20 @@ impl<'a> PiHopSchedule<'a> {
     }
 
     /// Returns the discrete scheduler slot for a monotonic millisecond value.
+    /// Returns `None` for an invalid zero interval instead of panicking.
     #[inline]
-    pub const fn slot(&self, now_ms: u64) -> u64 {
-        now_ms / self.interval_ms
+    pub const fn slot(&self, now_ms: u64) -> Option<u64> {
+        if self.interval_ms == 0 {
+            None
+        } else {
+            Some(now_ms / self.interval_ms)
+        }
     }
 
     /// Returns the relay selected for the current slot without allocating.
     #[inline]
     pub fn relay_for(&self, now_ms: u64) -> Option<&'a ApprovedRelay> {
-        if self.relays.is_empty() || self.interval_ms == 0 {
-            return None;
-        }
-        let slot = self.slot(now_ms);
+        let slot = self.slot(now_ms)?;
         self.relay_for_slot(slot)
     }
 
@@ -95,10 +98,12 @@ impl<'a> PiHopSchedule<'a> {
     /// remaining valid indefinitely while accommodating normal ±100 ms jitter.
     #[inline]
     pub fn accepts(&self, now_ms: u64, presented_relay: &ApprovedRelay) -> bool {
-        if self.relays.is_empty() || self.interval_ms == 0 {
+        let Some(current) = self.slot(now_ms) else {
+            return false;
+        };
+        if self.relays.is_empty() {
             return false;
         }
-        let current = self.slot(now_ms);
         let previous = current.saturating_sub(JITTER_SLOTS);
         let next = current.saturating_add(JITTER_SLOTS);
         self.matches_slot(previous, presented_relay)
@@ -112,6 +117,12 @@ impl<'a> PiHopSchedule<'a> {
             Some(expected) => expected == presented,
             None => false,
         }
+    }
+
+    /// Returns whether the scheduler has a usable interval and relay set.
+    #[inline]
+    pub const fn is_valid(&self) -> bool {
+        self.interval_ms != 0 && !self.relays.is_empty()
     }
 
     /// Exposes the configured logical epoch without allocation.
@@ -141,11 +152,11 @@ mod tests {
     #[test]
     fn rotates_on_100ms_slots() {
         let schedule = PiHopSchedule::new(&RELAYS, 0);
-        assert_eq!(schedule.slot(0), 0);
-        assert_eq!(schedule.slot(99), 0);
-        assert_eq!(schedule.slot(100), 1);
-        assert_eq!(schedule.slot(199), 1);
-        assert_eq!(schedule.slot(200), 2);
+        assert_eq!(schedule.slot(0), Some(0));
+        assert_eq!(schedule.slot(99), Some(0));
+        assert_eq!(schedule.slot(100), Some(1));
+        assert_eq!(schedule.slot(199), Some(1));
+        assert_eq!(schedule.slot(200), Some(2));
 
         assert_eq!(schedule.relay_for(0), schedule.relay_for_slot(0));
         assert_eq!(schedule.relay_for(100), schedule.relay_for_slot(1));
@@ -190,6 +201,16 @@ mod tests {
         let schedule = PiHopSchedule::new(&empty, 0);
         assert!(schedule.relay_for(0).is_none());
         assert!(!schedule.accepts(0, &RELAYS[0]));
+        assert!(!schedule.is_valid());
+    }
+
+    #[test]
+    fn zero_interval_fails_closed_without_panicking() {
+        let schedule = PiHopSchedule::with_interval(&RELAYS, 0, 0);
+        assert_eq!(schedule.slot(1_000), None);
+        assert!(schedule.relay_for(1_000).is_none());
+        assert!(!schedule.accepts(1_000, &RELAYS[0]));
+        assert!(!schedule.is_valid());
     }
 
     #[test]
