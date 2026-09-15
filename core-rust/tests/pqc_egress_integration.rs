@@ -7,12 +7,16 @@ mod pqc_native {
 
     use ml_dsa::{Keypair, MlDsa65};
     use ml_kem::{
-        kem::{Generate, KeyExport},
-        MlKem768,
+        kem::{Decapsulate, Encapsulate, Kem},
+        KeyExport, MlKem768,
     };
 
-    use atibon::crypto::transport::{open_barrier, seal_barrier, validate_envelope, BarrierPolicy};
-    use atibon::egress_governed::{evaluate, EgressInput, JsonlAudit, RouteDecision, RuntimeMode};
+    use atibon_core::crypto::transport::{
+        open_barrier, seal_barrier, validate_envelope, BarrierPolicy,
+    };
+    use atibon_core::egress_governed::{
+        evaluate, EgressInput, JsonlAudit, RouteDecision, RuntimeMode,
+    };
 
     const SIGNING_SEED_HEX: &str =
         "4242424242424242424242424242424242424242424242424242424242424242";
