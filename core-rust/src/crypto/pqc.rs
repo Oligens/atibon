@@ -97,7 +97,7 @@ mod tests {
         let verifying_key = signing_key.verifying_key();
         assert!(verifying_key.verify(message, &signature).is_ok());
         assert!(verifying_key.verify(b"tampered", &signature).is_err());
-        assert_eq!(verifying_key.encode().as_ref().len(), ML_DSA65_PUBLIC_KEY_BYTES);
+        assert_eq!(verifying_key.encode().as_slice().len(), ML_DSA65_PUBLIC_KEY_BYTES);
         assert_eq!(signature.encode().as_ref().len(), ML_DSA65_SIGNATURE_BYTES);
     }
     #[cfg(feature = "pqc-native")]
@@ -108,7 +108,7 @@ mod tests {
         let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
         let (ciphertext, sender_secret) = ek.encapsulate();
         assert_eq!(sender_secret, dk.decapsulate(&ciphertext));
-        assert_eq!(ek.to_bytes().as_ref().len(), 1184);
+        assert_eq!(ek.to_bytes().as_slice().len(), 1184);
         assert_eq!(ciphertext.as_ref().len(), 1088);
         assert_eq!(sender_secret.as_ref().len(), 32);
     }
