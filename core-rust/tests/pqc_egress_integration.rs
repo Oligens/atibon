@@ -8,7 +8,7 @@ mod pqc_native {
     use ml_dsa::{Keypair, MlDsa65};
     use ml_kem::{
         kem::{Decapsulate, Encapsulate, Kem},
-        MlKem768,
+        KeyExport, MlKem768,
     };
 
     use atibon_core::crypto::transport::{
