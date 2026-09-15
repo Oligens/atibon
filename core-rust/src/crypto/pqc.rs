@@ -59,7 +59,7 @@ pub fn sign_barrier(message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
             actual: seed.len(),
         });
     }
-    let seed_array: [u8; ML_DSA65_SEED_BYTES] = seed
+    let seed_array: ml_dsa::Seed = seed
         .as_slice()
         .try_into()
         .map_err(|_| PqcError::InvalidSigningSeed)?;
@@ -151,7 +151,7 @@ mod tests {
     #[cfg(feature = "pqc-native")]
     #[test]
     fn ml_dsa65_round_trip_uses_fips204_sizes() {
-        let seed = [0x42u8; ML_DSA65_SEED_BYTES];
+        let seed = ml_dsa::Seed::default();
         let signing_key = SigningKey::<MlDsa65>::from_seed(&seed);
         let message = b"ATIBON PQC integration test";
         let signature = signing_key.sign(message);
