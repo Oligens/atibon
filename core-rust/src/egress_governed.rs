@@ -88,6 +88,7 @@ fn now_secs() -> u64 {
         .as_secs()
 }
 
+#[allow(dead_code)]
 fn current_time_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -108,9 +109,6 @@ fn simulated_decision(input: &EgressInput, relay_available: bool) -> RouteDecisi
     }
 }
 
-/// Existing governed Egress API. Kept backward-compatible for callers that
-/// already provide one approved relay. It does not allocate/leak a static
-/// relay and does not change Shadow/Enforce semantics.
 pub fn evaluate(
     input: &EgressInput,
     mode: RuntimeMode,
@@ -159,12 +157,6 @@ pub fn evaluate(
     })
 }
 
-/// Full Egress path with deterministic Pi-Hop relay selection:
-/// TRAFFIC -> Reputation -> Risk/Policy -> Egress Decision -> Pi-Hop
-/// -> Approved Relay -> NAT/Proxy -> Audit.
-///
-/// Pi-Hop is only a selector over the supplied allowlist. It does not create
-/// endpoints, rewrite source addresses, or perform network operations.
 pub fn evaluate_with_pi_hop(
     input: &EgressInput,
     mode: RuntimeMode,
