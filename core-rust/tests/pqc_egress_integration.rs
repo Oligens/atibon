@@ -5,10 +5,7 @@
 mod pqc_native {
     use std::sync::{Mutex, OnceLock};
 
-    use ml_kem::{
-        kem::{Decapsulate, Encapsulate, Kem},
-        KeyExport, MlKem768,
-    };
+    use ml_kem::{kem::Kem, KeyExport, MlKem768};
 
     use atibon_core::crypto::transport::{
         open_barrier, seal_barrier, validate_envelope, BarrierPolicy,
@@ -33,8 +30,8 @@ mod pqc_native {
         }
 
         let (recipient_dk, recipient_ek) = MlKem768::generate_keypair();
-        let recipient_public_key =
-            hex(AsRef::<[u8]>::as_ref(&recipient_ek.to_bytes()));
+        let recipient_public_key = hex(KeyExport::to_bytes(&recipient_ek).as_slice());
+        let recipient_private_seed = hex(recipient_dk.to_seed().unwrap().as_slice());
 
         let policy = BarrierPolicy {
             policy_id: "pqc-egress-test".into(),
@@ -67,11 +64,9 @@ mod pqc_native {
         let structural = validate_envelope(&envelope, 1_500, 1, 1).expect("envelope validation");
         assert!(!structural.accepted);
 
-        #[allow(deprecated)]
-        let recipient_private_key = hex(recipient_dk.to_expanded_bytes().as_ref());
         let opened = open_barrier(
             &envelope,
-            &recipient_private_key,
+            &recipient_private_seed,
             &envelope.signer_public_key_hex,
             1_500,
             1,
