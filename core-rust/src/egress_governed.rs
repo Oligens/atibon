@@ -72,6 +72,10 @@ fn now_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
+fn current_time_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+}
+
 fn simulated_decision(input: &EgressInput, relay_available: bool) -> RouteDecision {
     let risk_triggered = input.policy_score >= 80 || input.reputation_score >= 70;
     if risk_triggered {
@@ -79,20 +83,42 @@ fn simulated_decision(input: &EgressInput, relay_available: bool) -> RouteDecisi
     } else { RouteDecision::Allow }
 }
 
-/// Existing governed Egress API. Kept intact for callers that already provide
-/// one approved relay. It delegates to the common execution path without
-/// changing Shadow/Enforce semantics.
+/// Existing governed Egress API. Kept backward-compatible for callers that
+/// already provide one approved relay. It does not allocate/leak a static
+/// relay and does not change Shadow/Enforce semantics.
 pub fn evaluate(
     input: &EgressInput,
     mode: RuntimeMode,
     approved_relay: Option<String>,
     audit: &mut JsonlAudit,
 ) -> std::io::Result<EgressResult> {
-    let relay = approved_relay.map(|endpoint| ApprovedRelay {
-        id: "configured-relay",
-        endpoint: Box::leak(endpoint.into_boxed_str()),
-    });
-    evaluate_with_pi_hop(input, mode, relay.as_slice(), 0, current_time_ms(), audit)
+    let relay_available = approved_relay.is_some();
+    let simulated = simulated_decision(input, relay_available);
+    let (effective, blocked) = match mode {
+        RuntimeMode::Shadow => (RouteDecision::Allow, false),
+        RuntimeMode::Enforce => (simulated, matches!(simulated, RouteDecision::Quarantine)),
+    };
+    let privacy_route = matches!(effective, RouteDecision::PrivacyRoute);
+    let relay = if privacy_route { approved_relay } else { None };
+    let nat_proxy = privacy_route && relay.is_some();
+    let trace = EgressTrace {
+        timestamp: now_secs(), mode, destination: input.destination.clone(),
+        reputation_score: input.reputation_score, policy_score: input.policy_score,
+        simulated_decision: simulated, effective_decision: effective,
+        relay, nat_proxy, source_ip_rewrite: false, packet_blocked: blocked,
+        shadow_mismatch: mode == RuntimeMode::Shadow && simulated != effective,
+        reason: match simulated {
+            RouteDecision::Allow => "reputation/policy allow; normal egress".into(),
+            RouteDecision::PrivacyRoute => "privacy route uses configured approved relay; NAT/proxy address is provider/OS assigned".into(),
+            RouteDecision::Quarantine => "risk/policy decision requires controlled quarantine".into(),
+        },
+    };
+    audit.write(&trace)?;
+    Ok(EgressResult {
+        mode, simulated_decision: simulated, effective_decision: effective,
+        relay: trace.relay, nat_proxy, source_ip_rewrite: false,
+        packet_blocked: blocked, audit_written: true, shadow_mismatch: trace.shadow_mismatch,
+    })
 }
 
 /// Full Egress path with deterministic Pi-Hop relay selection:
@@ -115,27 +141,17 @@ pub fn evaluate_with_pi_hop(
         RuntimeMode::Shadow => (RouteDecision::Allow, false),
         RuntimeMode::Enforce => (simulated, matches!(simulated, RouteDecision::Quarantine)),
     };
-
     let privacy_route = matches!(effective, RouteDecision::PrivacyRoute);
     let selected_relay = if privacy_route {
         PiHopSchedule::new(approved_relays, epoch).relay_for(now_ms)
     } else { None };
     let relay = selected_relay.map(|r| r.endpoint.to_owned());
     let nat_proxy = privacy_route && selected_relay.is_some();
-    let source_ip_rewrite = false;
-
     let trace = EgressTrace {
-        timestamp: now_secs(),
-        mode,
-        destination: input.destination.clone(),
-        reputation_score: input.reputation_score,
-        policy_score: input.policy_score,
-        simulated_decision: simulated,
-        effective_decision: effective,
-        relay,
-        nat_proxy,
-        source_ip_rewrite,
-        packet_blocked: blocked,
+        timestamp: now_secs(), mode, destination: input.destination.clone(),
+        reputation_score: input.reputation_score, policy_score: input.policy_score,
+        simulated_decision: simulated, effective_decision: effective,
+        relay, nat_proxy, source_ip_rewrite: false, packet_blocked: blocked,
         shadow_mismatch: mode == RuntimeMode::Shadow && simulated != effective,
         reason: match simulated {
             RouteDecision::Allow => "reputation/policy allow; normal egress".into(),
@@ -144,22 +160,11 @@ pub fn evaluate_with_pi_hop(
         },
     };
     audit.write(&trace)?;
-
     Ok(EgressResult {
-        mode,
-        simulated_decision: simulated,
-        effective_decision: effective,
-        relay: trace.relay,
-        nat_proxy,
-        source_ip_rewrite,
-        packet_blocked: blocked,
-        audit_written: true,
-        shadow_mismatch: trace.shadow_mismatch,
+        mode, simulated_decision: simulated, effective_decision: effective,
+        relay: trace.relay, nat_proxy, source_ip_rewrite: false,
+        packet_blocked: blocked, audit_written: true, shadow_mismatch: trace.shadow_mismatch,
     })
-}
-
-fn current_time_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
 }
 
 #[cfg(test)]
