@@ -47,11 +47,7 @@ impl<'a> PiHopSchedule<'a> {
 
     /// Creates a scheduler with an explicit interval. Zero is rejected by
     /// `is_valid`; callers should prefer `new` for the fixed 100 ms schedule.
-    pub const fn with_interval(
-        relays: &'a [ApprovedRelay],
-        epoch: u64,
-        interval_ms: u64,
-    ) -> Self {
+    pub const fn with_interval(relays: &'a [ApprovedRelay], epoch: u64, interval_ms: u64) -> Self {
         Self {
             relays,
             epoch,
