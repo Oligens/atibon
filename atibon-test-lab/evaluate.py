@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate ATIBON Test Lab results and calculate the official ADES weighting.
-
-ADES is a 0-100 weighted score. Component inputs are normalized to 0-100 before
-applying the official weights. Missing evidence is never silently converted to 0.
-"""
+"""Evaluate ATIBON Test Lab results and calculate the official ADES weighting."""
 from __future__ import annotations
 
 import argparse
@@ -34,11 +30,6 @@ def p95(values):
     return None if not values else values[min(len(values) - 1, int((len(values) - 1) * 0.95))]
 
 
-def mean(values):
-    values = [v for v in values if v is not None]
-    return statistics.fmean(values) if values else None
-
-
 def rate(numerator: int, denominator: int) -> float | None:
     return (100.0 * numerator / denominator) if denominator else None
 
@@ -51,11 +42,7 @@ def classify_ades(score: float) -> str:
 
 
 def calculate_ades(components: dict[str, float]) -> dict:
-    """Apply the official ADES weights to six 0-100 component scores.
-
-    The weighting is fixed: 30/25/15/10/10/10. Inputs outside 0-100 are
-    rejected instead of being silently clipped.
-    """
+    """Apply the official 30/25/15/10/10/10 ADES weighting to 0-100 inputs."""
     missing = [name for name in ADES_WEIGHTS if name not in components]
     if missing:
         raise ValueError("composantes ADES manquantes: " + ", ".join(missing))
@@ -63,10 +50,7 @@ def calculate_ades(components: dict[str, float]) -> dict:
     if invalid:
         raise ValueError(f"composantes ADES hors plage 0-100: {invalid}")
 
-    contributions = {
-        name: float(components[name]) * weight
-        for name, weight in ADES_WEIGHTS.items()
-    }
+    contributions = {name: float(components[name]) * weight for name, weight in ADES_WEIGHTS.items()}
     score = round(sum(contributions.values()), 2)
     return {
         "score": score,
@@ -78,42 +62,35 @@ def calculate_ades(components: dict[str, float]) -> dict:
 
 
 def derive_components(samples: list[dict], counts: dict) -> dict[str, float]:
-    """Derive ADES components only from evidence represented by Lab samples.
+    """Derive six ADES component scores from evidence present in Lab samples.
 
-    Observable mappings used by this benchmark:
-    - detection: TPR = TP / (TP + FN)
-    - prevention: blocked expected attacks / expected attacks
-    - confinement: blocked attacks / detected attacks
-    - evasion_resistance: 1 - FN / expected attacks
-    - recovery: share of attack samples with a recorded recovery time
-    - auditability: share of samples containing the complete required audit fields
-
-    These mappings operationalize the six ADES dimensions for the Lab; the
-    official part implemented here is the 30/25/15/10/10/10 weighting.
+    The Lab-specific normalization is explicit: detection=TPR; prevention=share
+    of detected attacks with an effective block; confinement=share of detected
+    attacks with a block; evasion resistance=1-FNR; recovery=share of detected
+    attacks with a recovery timestamp; auditability=complete required fields.
+    The official ADES definition implemented here is the fixed weighting.
     """
     attacks = counts["TP"] + counts["FN"]
     detected = sum(1 for s in samples if s.get("true_positive") == 1)
-    blocked = sum(1 for s in samples if s.get("blocking_time_ms") is not None and s.get("true_positive") == 1)
-    expected_attack_samples = sum(1 for s in samples if s.get("false_negative") == 1 or s.get("true_positive") == 1)
-    recovery_recorded = sum(1 for s in samples if s.get("recovery_time_ms") is not None and s.get("true_positive") == 1)
+    blocked = sum(1 for s in samples if s.get("true_positive") == 1 and s.get("blocking_time_ms") is not None)
+    recovery_recorded = sum(1 for s in samples if s.get("true_positive") == 1 and s.get("recovery_time_ms") is not None)
     audit_fields = (
         "vector", "repetition", "true_positive", "false_positive", "false_negative",
         "detection_time_ms", "blocking_time_ms", "cpu_overhead_pct",
         "memory_overhead_mb", "network_latency_ms", "recovery_time_ms",
     )
     auditable = sum(1 for s in samples if all(field in s for field in audit_fields))
-    total = len(samples)
 
     if not attacks:
         raise ValueError("aucun échantillon d'attaque exploitable pour calculer ADES")
 
     return {
         "detection": rate(counts["TP"], attacks) or 0.0,
-        "prevention": rate(blocked, expected_attack_samples) or 0.0,
+        "prevention": rate(blocked, attacks) or 0.0,
         "confinement": rate(blocked, detected) if detected else 0.0,
         "evasion_resistance": rate(attacks - counts["FN"], attacks) or 0.0,
         "recovery": rate(recovery_recorded, detected) if detected else 0.0,
-        "auditability": rate(auditable, total) if total else 0.0,
+        "auditability": rate(auditable, len(samples)) if samples else 0.0,
     }
 
 
@@ -135,6 +112,7 @@ def build_report(data: dict, source: str) -> dict:
     counts = {"TP": tp, "FP": fp, "FN": fn}
     components = derive_components(samples, counts)
     ades = calculate_ades(components)
+    benign = sum(1 for s in samples if s.get("expected_detection") is False or s.get("false_positive") == 1)
 
     return {
         "schema_version": "1.1",
@@ -143,11 +121,10 @@ def build_report(data: dict, source: str) -> dict:
         "counts": counts,
         "rates": {
             "true_positive_rate": tp / (tp + fn) if tp + fn else None,
-            "false_positive_rate": fp / sum(1 for s in samples if s.get("false_positive") is not None) if samples else None,
+            "false_positive_rate": fp / benign if benign else None,
             "false_negative_rate": fn / (tp + fn) if tp + fn else None,
         },
-        "timing": {k: stats(samples, k) for k in (
-            "detection_time_ms", "blocking_time_ms", "network_latency_ms", "recovery_time_ms")},
+        "timing": {k: stats(samples, k) for k in ("detection_time_ms", "blocking_time_ms", "network_latency_ms", "recovery_time_ms")},
         "overhead": {k: stats(samples, k) for k in ("cpu_overhead_pct", "memory_overhead_mb")},
         "reproducibility": {
             "mode": data.get("mode"),
@@ -158,15 +135,47 @@ def build_report(data: dict, source: str) -> dict:
     }
 
 
+def markdown_report(report: dict) -> str:
+    ades = report["ades"]
+    lines = [
+        "# Rapport d'évaluation ADES — ATIBON Test Lab", "",
+        f"**Score ADES : {ades['score']:.2f}/100 — {ades['classification']}**", "",
+        "## Calcul ADES", "",
+        "ADES = 30% détection + 25% prévention + 15% confinement + 10% résistance à l'évasion + 10% récupération + 10% auditabilité.", "",
+        "| Sous-composante | Score /100 | Poids | Contribution |",
+        "|---|---:|---:|---:|",
+    ]
+    labels = {
+        "detection": "Détection", "prevention": "Prévention", "confinement": "Confinement",
+        "evasion_resistance": "Résistance à l'évasion", "recovery": "Récupération", "auditability": "Auditabilité",
+    }
+    for key in ADES_WEIGHTS:
+        lines.append(f"| {labels[key]} | {ades['components'][key]:.2f} | {ades['weights_pct'][key]}% | {ades['weighted_contributions'][key]:.2f} |")
+    lines += [
+        "", "## Classification", "",
+        "| Score | Niveau |", "|---:|---|",
+        "| < 50 | insuffisant |", "| 50–69 | expérimental |", "| 70–84 | robuste |",
+        "| 85–94 | très robuste |", "| 95+ | niveau exceptionnel |", "",
+        "## Résultats du Lab", "",
+        f"- TP : {report['counts']['TP']}", f"- FP : {report['counts']['FP']}", f"- FN : {report['counts']['FN']}",
+        f"- Mode : {report['reproducibility'].get('mode')}",
+        f"- Répétitions : {report['reproducibility'].get('repetitions')}", "",
+        "Les valeurs `null` du Lab restent manquantes : elles ne sont pas interprétées comme zéro. Les scores de composantes doivent être lus avec la méthode de normalisation documentée dans `evaluate.py`.", "",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def main():
     ap = argparse.ArgumentParser(description="Calculate ADES from ATIBON Test Lab results")
     ap.add_argument("results", help="raw Lab JSON")
     ap.add_argument("--output", default="evaluation.json")
+    ap.add_argument("--markdown-output", default="evaluation.md")
     args = ap.parse_args()
 
     data = json.loads(Path(args.results).read_text(encoding="utf-8"))
     report = build_report(data, args.results)
     Path(args.output).write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    Path(args.markdown_output).write_text(markdown_report(report), encoding="utf-8")
 
     ades = report["ades"]
     print(f"ADES: {ades['score']:.2f}/100 — {ades['classification']}")
