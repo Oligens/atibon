@@ -5,7 +5,6 @@
 mod pqc_native {
     use std::sync::{Mutex, OnceLock};
 
-    use ml_dsa::{Keypair, MlDsa65};
     use ml_kem::{
         kem::{Decapsulate, Encapsulate, Kem},
         KeyExport, MlKem768,
