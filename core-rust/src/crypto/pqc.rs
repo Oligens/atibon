@@ -42,12 +42,8 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, PqcError> {
     let bytes = value.as_bytes();
     let mut out = Vec::with_capacity(bytes.len() / 2);
     for pair in bytes.chunks_exact(2) {
-        let hi = (pair[0] as char)
-            .to_digit(16)
-            .ok_or(PqcError::InvalidHex)?;
-        let lo = (pair[1] as char)
-            .to_digit(16)
-            .ok_or(PqcError::InvalidHex)?;
+        let hi = (pair[0] as char).to_digit(16).ok_or(PqcError::InvalidHex)?;
+        let lo = (pair[1] as char).to_digit(16).ok_or(PqcError::InvalidHex)?;
         out.push(((hi << 4) | lo) as u8);
     }
     Ok(out)
@@ -102,16 +98,16 @@ pub fn verify_barrier(
             expected: ML_DSA65_PUBLIC_KEY_BYTES,
             actual: public_key.len(),
         })?;
-    let verifying_key = VerifyingKey::<MlDsa65>::decode(&public_key_array)
-        .ok_or(PqcError::InvalidHex)?;
+    let verifying_key =
+        VerifyingKey::<MlDsa65>::decode(&public_key_array).ok_or(PqcError::InvalidHex)?;
     let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] = signature
         .try_into()
         .map_err(|_| PqcError::InvalidDsaSignatureLength {
             expected: ML_DSA65_SIGNATURE_BYTES,
             actual: signature.len(),
         })?;
-    let signature = ml_dsa::Signature::<MlDsa65>::decode(&signature_array)
-        .ok_or(PqcError::InvalidHex)?;
+    let signature =
+        ml_dsa::Signature::<MlDsa65>::decode(&signature_array).ok_or(PqcError::InvalidHex)?;
     Ok(verifying_key.verify(message, &signature).is_ok())
 }
 
