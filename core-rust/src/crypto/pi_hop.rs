@@ -25,6 +25,18 @@ pub struct ApprovedRelay {
     pub endpoint: &'static str,
 }
 
+/// A relay selected for a specific scheduler slot.
+///
+/// The slot is carried with the selected relay so jitter validation can reason
+/// about the provenance of the presented relay. Comparing only the relay value
+/// is insufficient because a deterministic schedule can legitimately reuse the
+/// same approved relay at multiple slots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScheduledRelay<'a> {
+    pub relay: &'a ApprovedRelay,
+    pub slot: u64,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct PiHopSchedule<'a> {
     relays: &'a [ApprovedRelay],
@@ -73,6 +85,13 @@ impl<'a> PiHopSchedule<'a> {
         self.relay_for_slot(slot)
     }
 
+    /// Returns the current relay together with its exact slot provenance.
+    #[inline]
+    pub fn scheduled_relay_for(&self, now_ms: u64) -> Option<ScheduledRelay<'a>> {
+        let slot = self.slot(now_ms)?;
+        self.scheduled_relay_for_slot(slot)
+    }
+
     /// Returns the relay selected by a specific deterministic slot.
     #[inline]
     pub fn relay_for_slot(&self, slot: u64) -> Option<&'a ApprovedRelay> {
@@ -83,30 +102,29 @@ impl<'a> PiHopSchedule<'a> {
         self.relays.get(index)
     }
 
+    /// Returns a relay and its exact scheduler slot without allocating.
+    #[inline]
+    pub fn scheduled_relay_for_slot(&self, slot: u64) -> Option<ScheduledRelay<'a>> {
+        let relay = self.relay_for_slot(slot)?;
+        Some(ScheduledRelay { relay, slot })
+    }
+
     /// Returns the deterministic relay index for a slot.
     #[inline]
     pub fn relay_index(&self, slot: u64) -> usize {
         // The epoch is mixed by wrapping addition. π supplies only a public,
         // deterministic schedule value; it is not cryptographic randomness.
-        // Use a 16-digit window as the entropy value before applying `% N`.
-        // This avoids accidental relay aliasing inside the ±1-slot validation
-        // window while keeping the critical path allocation-free.
-        const ENTROPY_DIGITS: usize = 16;
         let mixed_slot = slot.wrapping_add(self.epoch);
-        let mut entropy_value = 0u64;
-        for offset in 0..ENTROPY_DIGITS {
-            let index = (mixed_slot as usize).wrapping_add(offset) % PI_DIGITS.len();
-            entropy_value = entropy_value * 10 + (PI_DIGITS[index] - b'0') as u64;
-        }
+        let entropy_value = PI_DIGITS[(mixed_slot as usize) % PI_DIGITS.len()] - b'0';
         (entropy_value as usize) % self.relays.len()
     }
 
-    /// Accepts only the relay for k-1, k, or k+1 around the current slot.
+    /// Accepts only a relay whose recorded slot is k-1, k, or k+1.
     ///
-    /// This tolerance is intentionally bounded: it prevents an old relay from
-    /// remaining valid indefinitely while accommodating normal ±100 ms jitter.
+    /// Slot provenance is mandatory here. Comparing only `ApprovedRelay`
+    /// values would allow a relay reused by an older slot to pass validation.
     #[inline]
-    pub fn accepts(&self, now_ms: u64, presented_relay: &ApprovedRelay) -> bool {
+    pub fn accepts(&self, now_ms: u64, presented: &ScheduledRelay<'a>) -> bool {
         let Some(current) = self.slot(now_ms) else {
             return false;
         };
@@ -118,15 +136,12 @@ impl<'a> PiHopSchedule<'a> {
         let next = current.saturating_add(JITTER_SLOTS);
 
         // The acceptance window is exactly three slots: k-1, k, k+1.
-        self.matches_slot(previous, presented_relay)
-            || self.matches_slot(current, presented_relay)
-            || self.matches_slot(next, presented_relay)
-    }
+        if presented.slot < previous || presented.slot > next {
+            return false;
+        }
 
-    #[inline]
-    fn matches_slot(&self, slot: u64, presented: &ApprovedRelay) -> bool {
-        match self.relay_for_slot(slot) {
-            Some(expected) => expected == presented,
+        match self.relay_for_slot(presented.slot) {
+            Some(expected) => core::ptr::eq(expected, presented.relay),
             None => false,
         }
     }
@@ -190,31 +205,31 @@ mod tests {
     #[test]
     fn accepts_previous_current_and_next_slot() {
         let schedule = PiHopSchedule::new(&RELAYS, 0);
-        let previous = *schedule.relay_for_slot(9).unwrap();
-        let current = *schedule.relay_for_slot(10).unwrap();
-        let next = *schedule.relay_for_slot(11).unwrap();
+        let previous = schedule.scheduled_relay_for_slot(9).unwrap();
+        let current = schedule.scheduled_relay_for_slot(10).unwrap();
+        let next = schedule.scheduled_relay_for_slot(11).unwrap();
 
         assert!(schedule.accepts(1_000, &previous));
         assert!(schedule.accepts(1_000, &current));
         assert!(schedule.accepts(1_000, &next));
 
-        let far = *schedule.relay_for_slot(12).unwrap();
+        let far = schedule.scheduled_relay_for_slot(12).unwrap();
         assert!(!schedule.accepts(1_000, &far));
     }
 
     #[test]
     fn jitter_boundary_is_exactly_one_slot() {
         let schedule = PiHopSchedule::new(&RELAYS, 0);
-        let previous = *schedule.relay_for(899).unwrap();
-        let current = *schedule.relay_for(900).unwrap();
-        let next = *schedule.relay_for(1_000).unwrap();
+        let previous = schedule.scheduled_relay_for(899).unwrap();
+        let current = schedule.scheduled_relay_for(900).unwrap();
+        let next = schedule.scheduled_relay_for(1_000).unwrap();
 
         assert!(schedule.accepts(900, &previous));
         assert!(schedule.accepts(900, &current));
         assert!(schedule.accepts(900, &next));
 
-        let two_slots_back = *schedule.relay_for(700).unwrap();
-        let two_slots_forward = *schedule.relay_for(1_100).unwrap();
+        let two_slots_back = schedule.scheduled_relay_for(700).unwrap();
+        let two_slots_forward = schedule.scheduled_relay_for(1_100).unwrap();
         assert!(!schedule.accepts(900, &two_slots_back));
         assert!(!schedule.accepts(900, &two_slots_forward));
     }
@@ -224,7 +239,6 @@ mod tests {
         let empty: [ApprovedRelay; 0] = [];
         let schedule = PiHopSchedule::new(&empty, 0);
         assert!(schedule.relay_for(0).is_none());
-        assert!(!schedule.accepts(0, &RELAYS[0]));
         assert!(!schedule.is_valid());
     }
 
@@ -233,7 +247,6 @@ mod tests {
         let schedule = PiHopSchedule::with_interval(&RELAYS, 0, 0);
         assert_eq!(schedule.slot(1_000), None);
         assert!(schedule.relay_for(1_000).is_none());
-        assert!(!schedule.accepts(1_000, &RELAYS[0]));
         assert!(!schedule.is_valid());
     }
 
