@@ -16,7 +16,8 @@ pub const JITTER_SLOTS: u64 = 1;
 
 // Public, deterministic π digits. The decimal point is intentionally omitted.
 // Keeping the table static avoids heap allocation in the critical selection path.
-const PI_DIGITS: &[u8] = b"1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679";
+const PI_DIGITS: &[u8] =
+    b"1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApprovedRelay {
@@ -46,7 +47,11 @@ impl<'a> PiHopSchedule<'a> {
 
     /// Creates a scheduler with an explicit interval. Zero is rejected by
     /// `is_valid`; callers should prefer `new` for the fixed 100 ms schedule.
-    pub const fn with_interval(relays: &'a [ApprovedRelay], epoch: u64, interval_ms: u64) -> Self {
+    pub const fn with_interval(
+        relays: &'a [ApprovedRelay],
+        epoch: u64,
+        interval_ms: u64,
+    ) -> Self {
         Self {
             relays,
             epoch,
@@ -87,9 +92,17 @@ impl<'a> PiHopSchedule<'a> {
     pub fn relay_index(&self, slot: u64) -> usize {
         // The epoch is mixed by wrapping addition. π supplies only a public,
         // deterministic schedule value; it is not cryptographic randomness.
+        // Use a 16-digit window as the entropy value before applying `% N`.
+        // This avoids accidental relay aliasing inside the ±1-slot validation
+        // window while keeping the critical path allocation-free.
+        const ENTROPY_DIGITS: usize = 16;
         let mixed_slot = slot.wrapping_add(self.epoch);
-        let entropy = PI_DIGITS[(mixed_slot as usize) % PI_DIGITS.len()] - b'0';
-        (entropy as usize) % self.relays.len()
+        let mut entropy_value = 0u64;
+        for offset in 0..ENTROPY_DIGITS {
+            let index = (mixed_slot as usize).wrapping_add(offset) % PI_DIGITS.len();
+            entropy_value = entropy_value * 10 + (PI_DIGITS[index] - b'0') as u64;
+        }
+        (entropy_value as usize) % self.relays.len()
     }
 
     /// Accepts only the relay for k-1, k, or k+1 around the current slot.
@@ -104,8 +117,11 @@ impl<'a> PiHopSchedule<'a> {
         if self.relays.is_empty() {
             return false;
         }
+
         let previous = current.saturating_sub(JITTER_SLOTS);
         let next = current.saturating_add(JITTER_SLOTS);
+
+        // The acceptance window is exactly three slots: k-1, k, k+1.
         self.matches_slot(previous, presented_relay)
             || self.matches_slot(current, presented_relay)
             || self.matches_slot(next, presented_relay)
