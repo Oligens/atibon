@@ -3,9 +3,7 @@ use std::env;
 use thiserror::Error;
 
 #[cfg(feature = "pqc-native")]
-use ml_dsa::{
-    Keypair, MlDsa65, SignatureEncoding, Signer, SigningKey, Verifier, VerifyingKey,
-};
+use ml_dsa::{Keypair, MlDsa65, Signer, SigningKey, Verifier, VerifyingKey};
 #[cfg(feature = "pqc-native")]
 use ml_kem::{
     kem::{Decapsulate, Encapsulate, Kem},
@@ -100,7 +98,7 @@ pub fn verify_barrier(
             expected: ML_DSA65_PUBLIC_KEY_BYTES,
             actual: public_key.len(),
         })?;
-    let verifying_key = VerifyingKey::<MlDsa65>::decode(&public_key_array).ok_or(PqcError::InvalidHex)?;
+    let verifying_key = VerifyingKey::<MlDsa65>::decode(&public_key_array);
     let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] = signature
         .try_into()
         .map_err(|_| PqcError::InvalidDsaSignatureLength {
@@ -160,7 +158,10 @@ mod tests {
         let verifying_key = signing_key.verifying_key();
         assert!(verifying_key.verify(message, &signature).is_ok());
         assert!(verifying_key.verify(b"tampered", &signature).is_err());
-        assert_eq!(verifying_key.encode().as_slice().len(), ML_DSA65_PUBLIC_KEY_BYTES);
+        assert_eq!(
+            verifying_key.encode().as_slice().len(),
+            ML_DSA65_PUBLIC_KEY_BYTES
+        );
         let encoded_sig = signature.encode();
         assert_eq!(encoded_sig.as_slice().len(), ML_DSA65_SIGNATURE_BYTES);
     }
@@ -172,7 +173,10 @@ mod tests {
         let (ciphertext, sender_secret) = ek.encapsulate();
         assert_eq!(sender_secret, dk.decapsulate(&ciphertext));
         let encoded_public_key = KeyExport::to_bytes(&ek);
-        assert_eq!(encoded_public_key.as_slice().len(), ML_KEM768_PUBLIC_KEY_BYTES);
+        assert_eq!(
+            encoded_public_key.as_slice().len(),
+            ML_KEM768_PUBLIC_KEY_BYTES
+        );
         assert_eq!(ciphertext.as_slice().len(), ML_KEM768_CIPHERTEXT_BYTES);
         assert_eq!(sender_secret.as_slice().len(), ML_KEM768_SHARED_SECRET_BYTES);
     }
