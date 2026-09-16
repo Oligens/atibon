@@ -92,21 +92,23 @@ pub fn verify_barrier(
             actual: signature.len(),
         });
     }
-    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] = public_key
-        .try_into()
-        .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
-            expected: ML_DSA65_PUBLIC_KEY_BYTES,
-            actual: public_key.len(),
-        })?;
-    let verifying_key = VerifyingKey::<MlDsa65>::decode(&public_key_array);
-    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] = signature
-        .try_into()
-        .map_err(|_| PqcError::InvalidDsaSignatureLength {
-            expected: ML_DSA65_SIGNATURE_BYTES,
-            actual: signature.len(),
-        })?;
+    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] =
+        public_key
+            .try_into()
+            .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
+                expected: ML_DSA65_PUBLIC_KEY_BYTES,
+                actual: public_key.len(),
+            })?;
+    let verifying_key = VerifyingKey::<MlDsa65>::decode((&public_key_array).into());
+    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] =
+        signature
+            .try_into()
+            .map_err(|_| PqcError::InvalidDsaSignatureLength {
+                expected: ML_DSA65_SIGNATURE_BYTES,
+                actual: signature.len(),
+            })?;
     let signature =
-        ml_dsa::Signature::<MlDsa65>::decode(&signature_array).ok_or(PqcError::InvalidHex)?;
+        ml_dsa::Signature::<MlDsa65>::decode((&signature_array).into()).ok_or(PqcError::InvalidHex)?;
     Ok(verifying_key.verify(message, &signature).is_ok())
 }
 
@@ -178,6 +180,9 @@ mod tests {
             ML_KEM768_PUBLIC_KEY_BYTES
         );
         assert_eq!(ciphertext.as_slice().len(), ML_KEM768_CIPHERTEXT_BYTES);
-        assert_eq!(sender_secret.as_slice().len(), ML_KEM768_SHARED_SECRET_BYTES);
+        assert_eq!(
+            sender_secret.as_slice().len(),
+            ML_KEM768_SHARED_SECRET_BYTES
+        );
     }
 }
