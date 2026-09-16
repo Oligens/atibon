@@ -18,10 +18,6 @@ pub const ML_DSA65_SEED_BYTES: usize = 32;
 pub const ML_DSA65_PUBLIC_KEY_BYTES: usize = 1952;
 pub const ML_DSA65_SIGNATURE_BYTES: usize = 3309;
 
-/// Backwards-compatible PyO3 facade retained for existing Python consumers.
-///
-/// The native PQC operations are exposed through the module functions below.
-/// This facade intentionally has no unsafe or network-facing behavior.
 #[pyclass]
 #[derive(Debug, Default)]
 pub struct PqcFacade;
@@ -56,6 +52,7 @@ pub enum PqcError {
     InvalidSigningSeed,
 }
 
+#[allow(clippy::manual_is_multiple_of, clippy::chunks_exact_to_as_chunks)]
 fn decode_hex(value: &str) -> Result<Vec<u8>, PqcError> {
     if value.is_empty() || value.len() % 2 != 0 || !value.is_ascii() {
         return Err(PqcError::InvalidHex);
