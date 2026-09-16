@@ -59,7 +59,11 @@ impl<'a> PiHopSchedule<'a> {
 
     /// Creates a scheduler with an explicit interval. Zero is rejected by
     /// `is_valid`; callers should prefer `new` for the fixed 100 ms schedule.
-    pub const fn with_interval(relays: &'a [ApprovedRelay], epoch: u64, interval_ms: u64) -> Self {
+    pub const fn with_interval(
+        relays: &'a [ApprovedRelay],
+        epoch: u64,
+        interval_ms: u64,
+    ) -> Self {
         Self {
             relays,
             epoch,
@@ -71,11 +75,7 @@ impl<'a> PiHopSchedule<'a> {
     /// Returns `None` for an invalid zero interval instead of panicking.
     #[inline]
     pub const fn slot(&self, now_ms: u64) -> Option<u64> {
-        if self.interval_ms == 0 {
-            None
-        } else {
-            Some(now_ms / self.interval_ms)
-        }
+        now_ms.checked_div(self.interval_ms)
     }
 
     /// Returns the relay selected for the current slot without allocating.
