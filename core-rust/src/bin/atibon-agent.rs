@@ -3,9 +3,9 @@ use std::fs;
 use std::net::Ipv4Addr;
 use std::process::{Command, ExitCode, Stdio};
 
-use _native::ced::{self, TelemetrySample};
-use _native::egress_pipeline::{self, EgressRequest, EgressRuntimeMode};
-use _native::egress_privacy::EgressPolicy;
+use atibon_core::ced::{self, TelemetrySample};
+use atibon_core::egress_pipeline::{self, EgressRequest, EgressRuntimeMode};
+use atibon_core::egress_privacy::EgressPolicy;
 
 fn run_nft(args: &[&str]) -> Result<(), String> {
     let output = Command::new("nft")
@@ -67,8 +67,8 @@ fn egress_mode_run(args: &[String]) -> ExitCode {
     };
     let policy_path = arg_value(args, "--egress-policy")
         .unwrap_or_else(|| "/etc/atibon/egress-policy.json".into());
-    let audit_path =
-        arg_value(args, "--egress-audit").unwrap_or_else(|| "/var/log/atibon/egress.jsonl".into());
+    let audit_path = arg_value(args, "--egress-audit")
+        .unwrap_or_else(|| "/var/log/atibon/egress.jsonl".into());
     let runtime_mode = match egress_mode(args) {
         Ok(mode) => mode,
         Err(error) => {
@@ -97,7 +97,7 @@ fn egress_mode_run(args: &[String]) -> ExitCode {
         reputation_score,
         request_count,
     };
-    let audit = match _native::audit::AuditLog::open(&audit_path) {
+    let audit = match atibon_core::audit::AuditLog::open(&audit_path) {
         Ok(value) => value,
         Err(error) => {
             eprintln!("ATIBON: egress audit open failed: {error}");
