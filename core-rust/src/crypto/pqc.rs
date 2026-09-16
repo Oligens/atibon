@@ -10,6 +10,8 @@ use ml_kem::{
     KeyExport, MlKem768,
 };
 
+use pyo3::prelude::*;
+
 pub const ML_KEM768_CIPHERTEXT_BYTES: usize = 1088;
 pub const ML_KEM768_SHARED_SECRET_BYTES: usize = 32;
 pub const ML_KEM768_PUBLIC_KEY_BYTES: usize = 1184;
@@ -35,6 +37,12 @@ pub enum PqcError {
     InvalidSigningSeed,
 }
 
+impl From<PqcError> for pyo3::PyErr {
+    fn from(err: PqcError) -> Self {
+        pyo3::exceptions::PyValueError::new_err(err.to_string())
+    }
+}
+
 fn decode_hex(value: &str) -> Result<Vec<u8>, PqcError> {
     if value.is_empty() || value.len() % 2 != 0 || !value.is_ascii() {
         return Err(PqcError::InvalidHex);
@@ -49,8 +57,33 @@ fn decode_hex(value: &str) -> Result<Vec<u8>, PqcError> {
     Ok(out)
 }
 
+#[pyclass]
+pub struct PqcFacade;
+
+#[pymethods]
+impl PqcFacade {
+    #[staticmethod]
+    pub fn sign_barrier(message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
+        pqc_sign_barrier(message)
+    }
+
+    #[staticmethod]
+    pub fn verify_barrier(
+        message: &[u8],
+        signature: &[u8],
+        public_key: &[u8],
+    ) -> Result<bool, PqcError> {
+        pqc_verify_barrier(message, signature, public_key)
+    }
+
+    #[staticmethod]
+    pub fn kem_health() -> bool {
+        pqc_kem_health()
+    }
+}
+
 #[cfg(feature = "pqc-native")]
-pub fn sign_barrier(message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
+pub fn pqc_sign_barrier(message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
     let seed_hex = env::var("ATIBON_MLDSA65_SEED_HEX").map_err(|_| PqcError::MissingSigningSeed)?;
     let seed = decode_hex(&seed_hex)?;
     if seed.len() != ML_DSA65_SEED_BYTES {
@@ -70,12 +103,12 @@ pub fn sign_barrier(message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
 }
 
 #[cfg(not(feature = "pqc-native"))]
-pub fn sign_barrier(_message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
+pub fn pqc_sign_barrier(_message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
     Err(PqcError::FeatureDisabled)
 }
 
 #[cfg(feature = "pqc-native")]
-pub fn verify_barrier(
+pub fn pqc_verify_barrier(
     message: &[u8],
     signature: &[u8],
     public_key: &[u8],
@@ -92,22 +125,64 @@ pub fn verify_barrier(
             actual: signature.len(),
         });
     }
-    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] = public_key
-        .try_into()
-        .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
-            expected: ML_DSA65_PUBLIC_KEY_BYTES,
-            actual: public_key.len(),
-        })?;
-    let verifying_key = VerifyingKey::<MlDsa65>::decode(&public_key_array);
-    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] = signature
-        .try_into()
-        .map_err(|_| PqcError::InvalidDsaSignatureLength {
-            expected: ML_DSA65_SIGNATURE_BYTES,
-            actual: signature.len(),
-        })?;
-    let signature =
-        ml_dsa::Signature::<MlDsa65>::decode(&signature_array).ok_or(PqcError::InvalidHex)?;
+    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] =
+        public_key
+            .try_into()
+            .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
+                expected: ML_DSA65_PUBLIC_KEY_BYTES,
+                actual: public_key.len(),
+            })?;
+    let verifying_key = VerifyingKey::<MlDsa65>::decode((&public_key_array).into());
+    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] =
+        signature
+            .try_into()
+            .map_err(|_| PqcError::InvalidDsaSignatureLength {
+                expected: ML_DSA65_SIGNATURE_BYTES,
+                actual: signature.len(),
+            })?;
+    let signature = ml_dsa::Signature::<MlDsa65>::decode((&signature_array).into())
+        .ok_or(PqcError::InvalidHex)?;
     Ok(verifying_key.verify(message, &signature).is_ok())
+}
+
+#[cfg(not(feature = "pqc-native"))]
+pub fn pqc_verify_barrier(
+    _message: &[u8],
+    _signature: &[u8],
+    _public_key: &[u8],
+) -> Result<bool, PqcError> {
+    Err(PqcError::FeatureDisabled)
+}
+
+#[cfg(feature = "pqc-native")]
+pub fn pqc_kem_health() -> bool {
+    let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
+    let (ciphertext, sender_secret) = ek.encapsulate();
+    sender_secret == dk.decapsulate(&ciphertext)
+}
+
+#[cfg(not(feature = "pqc-native"))]
+pub fn pqc_kem_health() -> bool {
+    false
+}
+
+#[cfg(feature = "pqc-native")]
+pub fn sign_barrier(message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
+    pqc_sign_barrier(message)
+}
+
+#[cfg(not(feature = "pqc-native"))]
+pub fn sign_barrier(_message: &[u8]) -> Result<(Vec<u8>, Vec<u8>), PqcError> {
+    Err(PqcError::FeatureDisabled)
+}
+
+#[cfg(feature = "pqc-native")]
+pub fn verify_barrier(
+    message: &[u8],
+    signature: &[u8],
+    public_key: &[u8],
+) -> Result<bool, PqcError> {
+    pqc_verify_barrier(message, signature, public_key)
 }
 
 #[cfg(not(feature = "pqc-native"))]
@@ -121,9 +196,7 @@ pub fn verify_barrier(
 
 #[cfg(feature = "pqc-native")]
 pub fn kem_health() -> bool {
-    let (dk, ek) = <MlKem768 as Kem>::generate_keypair();
-    let (ciphertext, sender_secret) = ek.encapsulate();
-    sender_secret == dk.decapsulate(&ciphertext)
+    pqc_kem_health()
 }
 
 #[cfg(not(feature = "pqc-native"))]
@@ -178,6 +251,9 @@ mod tests {
             ML_KEM768_PUBLIC_KEY_BYTES
         );
         assert_eq!(ciphertext.as_slice().len(), ML_KEM768_CIPHERTEXT_BYTES);
-        assert_eq!(sender_secret.as_slice().len(), ML_KEM768_SHARED_SECRET_BYTES);
+        assert_eq!(
+            sender_secret.as_slice().len(),
+            ML_KEM768_SHARED_SECRET_BYTES
+        );
     }
 }
