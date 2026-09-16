@@ -76,10 +76,8 @@ mod pqc_native {
         assert!(opened.accepted);
         assert_eq!(opened.policy, policy);
 
-        let audit_path = std::env::temp_dir().join(format!(
-            "atibon-pqc-egress-{}.jsonl",
-            std::process::id()
-        ));
+        let audit_path =
+            std::env::temp_dir().join(format!("atibon-pqc-egress-{}.jsonl", std::process::id()));
         let mut audit = JsonlAudit::open(&audit_path).expect("audit log");
         let egress = evaluate(
             &EgressInput {
