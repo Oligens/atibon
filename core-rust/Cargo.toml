@@ -34,3 +34,6 @@ pqc-native = ["dep:ml-kem", "dep:ml-dsa", "dep:hkdf", "dep:chacha20poly1305"]
 hsm-pkcs11 = []
 tpm2-native = []
 ebpf-aya = []
+
+[lints.clippy]
+too-many-arguments = "allow"
