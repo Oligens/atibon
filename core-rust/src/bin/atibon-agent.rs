@@ -67,8 +67,8 @@ fn egress_mode_run(args: &[String]) -> ExitCode {
     };
     let policy_path = arg_value(args, "--egress-policy")
         .unwrap_or_else(|| "/etc/atibon/egress-policy.json".into());
-    let audit_path = arg_value(args, "--egress-audit")
-        .unwrap_or_else(|| "/var/log/atibon/egress.jsonl".into());
+    let audit_path =
+        arg_value(args, "--egress-audit").unwrap_or_else(|| "/var/log/atibon/egress.jsonl".into());
     let runtime_mode = match egress_mode(args) {
         Ok(mode) => mode,
         Err(error) => {
