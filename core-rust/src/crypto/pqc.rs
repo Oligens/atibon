@@ -1,6 +1,7 @@
 use std::env;
 
 use thiserror::Error;
+use pyo3::prelude::*;
 
 #[cfg(feature = "pqc-native")]
 use ml_dsa::{Keypair, MlDsa65, Signer, SigningKey, Verifier, VerifyingKey};
@@ -16,6 +17,26 @@ pub const ML_KEM768_PUBLIC_KEY_BYTES: usize = 1184;
 pub const ML_DSA65_SEED_BYTES: usize = 32;
 pub const ML_DSA65_PUBLIC_KEY_BYTES: usize = 1952;
 pub const ML_DSA65_SIGNATURE_BYTES: usize = 3309;
+
+/// Backwards-compatible PyO3 facade retained for existing Python consumers.
+///
+/// The native PQC operations are exposed through the module functions below.
+/// This facade intentionally has no unsafe or network-facing behavior.
+#[pyclass]
+#[derive(Debug, Default)]
+pub struct PqcFacade;
+
+#[pymethods]
+impl PqcFacade {
+    #[new]
+    fn new() -> Self {
+        Self
+    }
+
+    fn kem_health(&self) -> bool {
+        kem_health()
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum PqcError {
@@ -92,21 +113,19 @@ pub fn verify_barrier(
             actual: signature.len(),
         });
     }
-    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] =
-        public_key
-            .try_into()
-            .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
-                expected: ML_DSA65_PUBLIC_KEY_BYTES,
-                actual: public_key.len(),
-            })?;
+    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] = public_key
+        .try_into()
+        .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
+            expected: ML_DSA65_PUBLIC_KEY_BYTES,
+            actual: public_key.len(),
+        })?;
     let verifying_key = VerifyingKey::<MlDsa65>::decode((&public_key_array).into());
-    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] =
-        signature
-            .try_into()
-            .map_err(|_| PqcError::InvalidDsaSignatureLength {
-                expected: ML_DSA65_SIGNATURE_BYTES,
-                actual: signature.len(),
-            })?;
+    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] = signature
+        .try_into()
+        .map_err(|_| PqcError::InvalidDsaSignatureLength {
+            expected: ML_DSA65_SIGNATURE_BYTES,
+            actual: signature.len(),
+        })?;
     let signature =
         ml_dsa::Signature::<MlDsa65>::decode((&signature_array).into()).ok_or(PqcError::InvalidHex)?;
     Ok(verifying_key.verify(message, &signature).is_ok())
