@@ -110,19 +110,21 @@ pub fn verify_barrier(
             actual: signature.len(),
         });
     }
-    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] = public_key
-        .try_into()
-        .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
-            expected: ML_DSA65_PUBLIC_KEY_BYTES,
-            actual: public_key.len(),
-        })?;
+    let public_key_array: [u8; ML_DSA65_PUBLIC_KEY_BYTES] =
+        public_key
+            .try_into()
+            .map_err(|_| PqcError::InvalidDsaPublicKeyLength {
+                expected: ML_DSA65_PUBLIC_KEY_BYTES,
+                actual: public_key.len(),
+            })?;
     let verifying_key = VerifyingKey::<MlDsa65>::decode((&public_key_array).into());
-    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] = signature
-        .try_into()
-        .map_err(|_| PqcError::InvalidDsaSignatureLength {
-            expected: ML_DSA65_SIGNATURE_BYTES,
-            actual: signature.len(),
-        })?;
+    let signature_array: [u8; ML_DSA65_SIGNATURE_BYTES] =
+        signature
+            .try_into()
+            .map_err(|_| PqcError::InvalidDsaSignatureLength {
+                expected: ML_DSA65_SIGNATURE_BYTES,
+                actual: signature.len(),
+            })?;
     let signature = ml_dsa::Signature::<MlDsa65>::decode((&signature_array).into())
         .ok_or(PqcError::InvalidHex)?;
     Ok(verifying_key.verify(message, &signature).is_ok())
