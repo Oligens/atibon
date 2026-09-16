@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::fs::{File, OpenOptions};
+use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Mutex;
@@ -13,17 +13,40 @@ pub struct AuditEvent<'a> {
     pub reason: &'a str,
 }
 
-pub struct AuditLog { writer: Mutex<BufWriter<File>> }
+pub struct AuditLog {
+    writer: Mutex<BufWriter<File>>,
+}
 
 impl AuditLog {
     pub fn open(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                create_dir_all(parent)?;
+            }
+        }
         let file = OpenOptions::new().create(true).append(true).open(path)?;
-        Ok(Self { writer: Mutex::new(BufWriter::new(file)) })
+        Ok(Self {
+            writer: Mutex::new(BufWriter::new(file)),
+        })
     }
-    pub fn record(&self, action:&str, source:&str, reason:&str) -> std::io::Result<()> {
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-        let line = serde_json::to_string(&AuditEvent { timestamp, action, source, reason }).expect("audit serialization");
-        let mut writer = self.writer.lock().map_err(|_| std::io::Error::other("audit lock poisoned"))?;
+
+    pub fn record(&self, action: &str, source: &str, reason: &str) -> std::io::Result<()> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let line = serde_json::to_string(&AuditEvent {
+            timestamp,
+            action,
+            source,
+            reason,
+        })
+        .expect("audit serialization");
+        let mut writer = self
+            .writer
+            .lock()
+            .map_err(|_| std::io::Error::other("audit lock poisoned"))?;
         writeln!(writer, "{line}")?;
         writer.flush()
     }
