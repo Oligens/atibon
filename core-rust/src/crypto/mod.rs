@@ -3,3 +3,5 @@ pub mod pi_hop;
 pub mod pqc;
 pub mod tpm;
 pub mod transport;
+
+pub use pqc::PqcFacade;
