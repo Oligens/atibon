@@ -1,7 +1,7 @@
 use std::env;
 
-use thiserror::Error;
 use pyo3::prelude::*;
+use thiserror::Error;
 
 #[cfg(feature = "pqc-native")]
 use ml_dsa::{Keypair, MlDsa65, Signer, SigningKey, Verifier, VerifyingKey};
@@ -126,8 +126,8 @@ pub fn verify_barrier(
             expected: ML_DSA65_SIGNATURE_BYTES,
             actual: signature.len(),
         })?;
-    let signature =
-        ml_dsa::Signature::<MlDsa65>::decode((&signature_array).into()).ok_or(PqcError::InvalidHex)?;
+    let signature = ml_dsa::Signature::<MlDsa65>::decode((&signature_array).into())
+        .ok_or(PqcError::InvalidHex)?;
     Ok(verifying_key.verify(message, &signature).is_ok())
 }
 
